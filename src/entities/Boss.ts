@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { BossDef, BossPattern } from '../data/bosses';
-import { buildBossCore, buildBossHorn, stdMat } from '../visual/builders';
-import { getBossTexture } from '../visual/textures';
+import { PixelActor, type CreatureId } from '../visual/sprites';
+import { makeGroundRing, makeShadow } from '../visual/pixelScene';
 
 export type BossAction =
   | { type: 'ring'; count: number; speed: number; damage: number; color: number }
@@ -9,7 +9,7 @@ export type BossAction =
   | null;
 
 type Ghost = {
-  mesh: THREE.Mesh;
+  sprite: THREE.Sprite;
   life: number;
   maxLife: number;
 };
@@ -20,10 +20,9 @@ export class Boss {
   readonly group: THREE.Group;
   /** 残影挂在场景根，不跟随 Boss 位移 */
   readonly fxRoot: THREE.Group;
-  readonly body: THREE.Mesh;
-  private readonly mat: THREE.MeshStandardMaterial;
-  private readonly accentMat: THREE.MeshStandardMaterial;
-  private accentParts: THREE.Object3D[] = [];
+  private actor: PixelActor | null = null;
+  private shadow: THREE.Mesh | null = null;
+  private warnRing: THREE.Mesh | null = null;
   private hpBarBg: THREE.Mesh | null = null;
   private hpBarFill: THREE.Mesh | null = null;
   private animTime = 0;
@@ -57,16 +56,10 @@ export class Boss {
   constructor() {
     this.group = new THREE.Group();
     this.fxRoot = new THREE.Group();
-    this.mat = stdMat(0xff4d6d, { ei: 0.45, rough: 0.4, metal: 0.35 });
-    this.accentMat = stdMat(0xffd166, { ei: 0.65, rough: 0.35, metal: 0.3 });
-    this.body = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), this.mat);
-    this.body.castShadow = true;
-    this.group.add(this.body);
     this.group.visible = false;
   }
 
   spawn(def: BossDef, x: number, z: number, hpMul: number, speedMul: number, dmgMul: number): void {
-    this.clearAccents();
     this.clearGhosts();
     this.active = true;
     this.def = def;
@@ -89,97 +82,68 @@ export class Boss {
     this.phaseGhostArmed = false;
     this.group.visible = true;
     this.group.position.set(x, 0, z);
-
-    this.body.geometry.dispose();
-    this.body.scale.set(1, 1, 1);
-
-    this.mat.color.setHex(def.color);
-    this.mat.emissive.setHex(def.color);
-    this.accentMat.color.setHex(def.accent);
-    this.accentMat.emissive.setHex(def.accent);
-
-    const plate = getBossTexture(def.color, def.accent);
-    this.mat.map = plate;
-    this.mat.needsUpdate = true;
-    this.accentMat.map = plate;
-    this.accentMat.needsUpdate = true;
-
-    if (def.shape === 'horn') {
-      const built = buildBossHorn(def.radius, this.mat, this.accentMat);
-      this.body.geometry = built.bodyGeo;
-      this.body.position.y = built.bodyY;
-      this.body.scale.set(1.15, 1, 1.25);
-      for (const p of built.parts) {
-        this.group.add(p);
-        this.accentParts.push(p);
-      }
-    } else {
-      const built = buildBossCore(def.radius, this.mat, this.accentMat);
-      this.body.geometry = built.bodyGeo;
-      this.body.position.y = built.bodyY;
-      for (const p of built.parts) {
-        this.group.add(p);
-        this.accentParts.push(p);
-      }
-    }
-
+    this.ensureVisual(def);
     this.ensureHpBar();
     this.updateHpBar();
   }
 
-  private clearAccents(): void {
-    for (const m of this.accentParts) {
-      this.group.remove(m);
-      m.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) {
-          obj.geometry.dispose();
-          const mat = obj.material;
-          if (mat !== this.mat && mat !== this.accentMat) {
-            if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-            else mat.dispose();
-          }
-        }
-      });
+  private ensureVisual(def: BossDef): void {
+    const id: CreatureId = def.shape === 'horn' ? 'horn' : 'core';
+    if (!this.actor) {
+      this.actor = new PixelActor(id, def.radius, 4);
+      this.group.add(this.actor.sprite);
+    } else {
+      this.actor.retarget(id, def.radius);
     }
-    this.accentParts = [];
+    const fw = Math.max(this.actor.width, def.radius) * 0.9;
+    if (!this.shadow) {
+      this.shadow = makeShadow(fw);
+      this.group.add(this.shadow);
+    }
+    this.shadow.scale.set(fw, fw * 0.5, 1);
+
+    const color = def.shape === 'horn' ? 0xff4d6d : 0x7b2cbf;
+    if (!this.warnRing) {
+      this.warnRing = makeGroundRing(def.radius * 1.28, color, 0.5);
+      this.group.add(this.warnRing);
+    } else {
+      this.warnRing.scale.setScalar(def.radius * 1.28);
+      (this.warnRing.material as THREE.MeshBasicMaterial).color.setHex(color);
+    }
   }
 
   private clearGhosts(): void {
     for (const g of this.ghosts) {
-      this.fxRoot.remove(g.mesh);
-      (g.mesh.material as THREE.Material).dispose();
-      // geometry 与 body 共享，不 dispose
+      this.fxRoot.remove(g.sprite);
+      g.sprite.material.dispose();
     }
     this.ghosts.length = 0;
   }
 
   private spawnGhost(opts?: { opacity?: number; scale?: number; life?: number; offsetX?: number; offsetZ?: number }): void {
+    if (!this.actor) return;
     while (this.ghosts.length >= MAX_GHOSTS) {
       const old = this.ghosts.shift()!;
-      this.fxRoot.remove(old.mesh);
-      (old.mesh.material as THREE.Material).dispose();
+      this.fxRoot.remove(old.sprite);
+      old.sprite.material.dispose();
     }
-    const color = this.def?.accent ?? 0xffd166;
     const baseOp = opts?.opacity ?? 0.35;
-    const mat = new THREE.MeshBasicMaterial({
-      color,
-      transparent: true,
-      opacity: baseOp,
-      depthWrite: false,
-    });
-    mat.userData.baseOp = baseOp;
-    const mesh = new THREE.Mesh(this.body.geometry, mat);
-    mesh.scale.copy(this.body.scale);
-    if (opts?.scale) mesh.scale.multiplyScalar(opts.scale);
-    mesh.rotation.copy(this.body.rotation);
-    // 世界坐标：group 位姿 + body 本地
-    const wx = this.group.position.x + (opts?.offsetX ?? 0);
-    const wz = this.group.position.z + (opts?.offsetZ ?? 0);
-    mesh.position.set(wx, this.body.position.y, wz);
-    mesh.rotation.y = this.body.rotation.y;
-    this.fxRoot.add(mesh);
+    const mat = this.actor.material.clone();
+    mat.opacity = baseOp;
+    mat.depthWrite = false;
+    mat.alphaTest = 0.05;
+    mat.transparent = true;
+    const sprite = new THREE.Sprite(mat);
+    sprite.center.copy(this.actor.sprite.center);
+    const sc = opts?.scale ?? 1;
+    sprite.scale.set(Math.abs(this.actor.sprite.scale.x) * sc, this.actor.sprite.scale.y * sc, 1);
+    sprite.renderOrder = 2;
+    const wp = new THREE.Vector3();
+    this.actor.sprite.getWorldPosition(wp);
+    sprite.position.set(wp.x + (opts?.offsetX ?? 0), wp.y, wp.z + (opts?.offsetZ ?? 0));
+    this.fxRoot.add(sprite);
     const maxLife = opts?.life ?? 0.28;
-    this.ghosts.push({ mesh, life: maxLife, maxLife });
+    this.ghosts.push({ sprite, life: maxLife, maxLife });
   }
 
   private updateGhosts(dt: number): void {
@@ -192,7 +156,6 @@ export class Boss {
       }
     }
 
-    // 星环邪核：攻击闪色时留下相位残像
     if (this.def?.shape === 'core' && this.attackFlash > 0.4 && !this.phaseGhostArmed) {
       this.phaseGhostArmed = true;
       this.spawnGhost({ opacity: 0.3, scale: 1.08, life: 0.4, offsetX: 0.35 });
@@ -204,11 +167,11 @@ export class Boss {
       const g = this.ghosts[i];
       g.life -= dt;
       const t = Math.max(0, g.life / g.maxLife);
-      const m = g.mesh.material as THREE.MeshBasicMaterial;
-      m.opacity = t * (m.userData.baseOp ?? 0.35);
-      g.mesh.scale.multiplyScalar(1 + dt * 0.35);
+      const m = g.sprite.material;
+      m.opacity = t * 0.4;
+      g.sprite.scale.multiplyScalar(1 + dt * 0.35);
       if (g.life <= 0) {
-        this.fxRoot.remove(g.mesh);
+        this.fxRoot.remove(g.sprite);
         m.dispose();
         this.ghosts.splice(i, 1);
       }
@@ -218,15 +181,15 @@ export class Boss {
   private ensureHpBar(): void {
     if (this.hpBarBg) return;
     const bg = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.2, 0.18),
-      new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.7, depthWrite: false }),
+      new THREE.PlaneGeometry(3.2, 0.22),
+      new THREE.MeshBasicMaterial({ color: 0x14080c, transparent: true, opacity: 0.85, depthWrite: false }),
     );
-    bg.position.y = 4.2;
     const fill = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.0, 0.12),
+      new THREE.PlaneGeometry(3.0, 0.14),
       new THREE.MeshBasicMaterial({ color: 0xff4d6d, depthWrite: false }),
     );
-    fill.position.set(0, 4.2, 0.01);
+    bg.renderOrder = 6;
+    fill.renderOrder = 6;
     this.group.add(bg);
     this.group.add(fill);
     this.hpBarBg = bg;
@@ -234,16 +197,18 @@ export class Boss {
   }
 
   private updateHpBar(): void {
-    if (!this.hpBarFill || !this.hpBarBg) return;
+    if (!this.hpBarFill || !this.hpBarBg || !this.actor) return;
     const r = this.maxHp > 0 ? Math.max(0, this.hp / this.maxHp) : 0;
     this.hpBarFill.scale.x = Math.max(0.001, r);
     this.hpBarFill.position.x = -1.5 * (1 - r);
-    this.hpBarBg.position.y = this.radius * 2.55 + 0.7;
-    this.hpBarFill.position.y = this.hpBarBg.position.y;
+    const y = this.actor.height + 0.45;
+    this.hpBarBg.position.y = y;
+    this.hpBarFill.position.y = y;
+    this.hpBarFill.position.z = 0.02;
   }
 
   update(dt: number, targetX: number, targetZ: number): BossAction {
-    if (!this.active || !this.def) return null;
+    if (!this.active || !this.def || !this.actor) return null;
     this.animTime += dt;
     if (this.attackFlash > 0) this.attackFlash -= dt;
 
@@ -253,27 +218,11 @@ export class Boss {
     const nx = dx / dist;
     const nz = dz / dist;
 
-    this.body.rotation.y = Math.atan2(nx, nz);
-    if (this.def.shape === 'core') {
-      this.body.rotation.y += dt * 1.2;
-      this.body.position.y = this.radius + Math.sin(this.animTime * 2.2) * 0.12;
-      for (const p of this.accentParts) {
-        if (p instanceof THREE.Mesh && p.geometry.type === 'TorusGeometry') {
-          p.rotation.z += dt * 1.5;
-          p.rotation.x += dt * 0.4;
-        } else if (p instanceof THREE.Mesh && p.geometry.type === 'TetrahedronGeometry') {
-          p.rotation.y += dt * 2;
-          p.position.y += Math.sin(this.animTime * 3 + p.position.x) * 0.002;
-        }
-      }
-    } else {
-      this.body.scale.y = 1 + Math.sin(this.animTime * 2.5) * 0.03;
-      for (const p of this.accentParts) {
-        if (p instanceof THREE.Mesh && p.geometry.type === 'RingGeometry') {
-          const m = p.material as THREE.MeshBasicMaterial;
-          m.opacity = 0.28 + Math.sin(this.animTime * 5) * 0.12 + (this.charging ? 0.25 : 0);
-        }
-      }
+    if (Math.abs(nx) > 0.05) this.actor.setFacing(nx > 0);
+    this.actor.place(this.animTime, this.charging || this.restTimer <= 0);
+    if (this.warnRing) {
+      const m = this.warnRing.material as THREE.MeshBasicMaterial;
+      m.opacity = 0.32 + Math.sin(this.animTime * 5) * 0.12 + (this.charging ? 0.28 : 0);
     }
 
     let action: BossAction = null;
@@ -311,17 +260,14 @@ export class Boss {
     this.group.position.x = THREE.MathUtils.clamp(this.group.position.x, -lim, lim);
     this.group.position.z = THREE.MathUtils.clamp(this.group.position.z, -lim, lim);
 
-    let ei = 0.45 + (this.phase > 0 ? 0.2 : 0);
+    let flash = 0;
     if (this.hitFlash > 0) {
       this.hitFlash -= dt;
-      ei = 1.55;
+      flash = 1;
     } else if (this.charging || this.attackFlash > 0) {
-      ei = 0.95 + Math.sin(this.animTime * 18) * 0.35;
-      this.accentMat.emissiveIntensity = 1.1;
-    } else {
-      this.accentMat.emissiveIntensity = 0.65;
+      flash = 0.45 + Math.sin(this.animTime * 18) * 0.25;
     }
-    this.mat.emissiveIntensity = ei;
+    this.actor.flash(flash);
 
     if (this.phase === 0 && this.hp / this.maxHp < 0.4) {
       this.phase = 1;
@@ -330,9 +276,9 @@ export class Boss {
 
     this.updateGhosts(dt);
     this.updateHpBar();
-    if (this.hpBarBg) {
-      this.hpBarBg.rotation.set(-0.55, 0, 0);
-      this.hpBarFill!.rotation.copy(this.hpBarBg.rotation);
+    if (this.hpBarBg && this.hpBarFill) {
+      this.hpBarBg.rotation.set(-0.7, 0, 0);
+      this.hpBarFill.rotation.copy(this.hpBarBg.rotation);
     }
 
     return action;
@@ -390,18 +336,15 @@ export class Boss {
   }
 
   dispose(): void {
-    this.clearAccents();
     this.clearGhosts();
-    this.body.geometry.dispose();
-    this.mat.dispose();
-    this.accentMat.dispose();
-    if (this.hpBarBg) {
-      this.hpBarBg.geometry.dispose();
-      (this.hpBarBg.material as THREE.Material).dispose();
-    }
-    if (this.hpBarFill) {
-      this.hpBarFill.geometry.dispose();
-      (this.hpBarFill.material as THREE.Material).dispose();
-    }
+    this.actor?.dispose();
+    this.group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh) {
+        obj.geometry.dispose();
+        const mat = obj.material;
+        if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+        else mat.dispose();
+      }
+    });
   }
 }

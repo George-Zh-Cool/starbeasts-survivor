@@ -1,32 +1,36 @@
 import * as THREE from 'three';
+import { projectileFrames } from '../visual/sprites';
 
 /** Enemy / boss bullets that damage the player on contact. */
 export class HostileProjectile {
-  readonly mesh: THREE.Group;
-  private readonly core: THREE.Mesh;
-  private readonly glow: THREE.Mesh;
+  readonly mesh: THREE.Sprite;
+  private readonly material: THREE.SpriteMaterial;
+  private readonly frames: [THREE.Texture, THREE.Texture];
   active = false;
   damage = 0;
   life = 0;
   radius = 0.28;
   readonly velocity = new THREE.Vector3();
+  private frameT = 0;
+  private readonly aspect: number;
+  private readonly baseH = 0.62;
 
   constructor() {
-    this.mesh = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0xff006e,
-      emissive: 0xff006e,
-      emissiveIntensity: 1.0,
-      roughness: 0.28,
-      metalness: 0.25,
+    this.frames = projectileFrames('thorn');
+    const img = this.frames[0].image as HTMLCanvasElement;
+    this.aspect = img.width / img.height;
+    this.material = new THREE.SpriteMaterial({
+      map: this.frames[0],
+      color: 0xff4d88,
+      transparent: true,
+      alphaTest: 0.15,
+      depthWrite: false,
+      toneMapped: false,
     });
-    this.core = new THREE.Mesh(new THREE.OctahedronGeometry(0.2, 0), mat);
-    this.glow = new THREE.Mesh(
-      new THREE.SphereGeometry(0.34, 8, 6),
-      new THREE.MeshBasicMaterial({ color: 0xff006e, transparent: true, opacity: 0.35, depthWrite: false }),
-    );
-    this.mesh.add(this.core);
-    this.mesh.add(this.glow);
+    this.mesh = new THREE.Sprite(this.material);
+    this.mesh.center.set(0.5, 0.5);
+    this.mesh.renderOrder = 6;
+    this.mesh.scale.set(this.baseH * this.aspect, this.baseH, 1);
     this.mesh.visible = false;
   }
 
@@ -47,19 +51,19 @@ export class HostileProjectile {
     this.velocity.set(dirX, 0, dirZ).normalize().multiplyScalar(speed);
     this.damage = damage;
     this.life = life;
-    const mat = this.core.material as THREE.MeshStandardMaterial;
-    mat.color.setHex(color);
-    mat.emissive.setHex(color);
-    (this.glow.material as THREE.MeshBasicMaterial).color.setHex(color);
+    this.frameT = Math.random();
+    this.material.color.setHex(color);
   }
 
   update(dt: number): void {
     if (!this.active) return;
     this.mesh.position.x += this.velocity.x * dt;
     this.mesh.position.z += this.velocity.z * dt;
-    this.core.rotation.y += dt * 10;
-    this.core.rotation.z += dt * 6;
-    this.glow.scale.setScalar(1 + Math.sin(performance.now() * 0.025) * 0.15);
+    this.frameT += dt;
+    const tex = this.frames[Math.floor(this.frameT * 10) % 2];
+    if (this.material.map !== tex) this.material.map = tex;
+    const pulse = 1 + Math.sin(this.frameT * 14) * 0.1;
+    this.mesh.scale.set(this.baseH * this.aspect * pulse, this.baseH * pulse, 1);
     this.life -= dt;
     if (this.life <= 0) this.despawn();
   }
@@ -70,9 +74,6 @@ export class HostileProjectile {
   }
 
   dispose(): void {
-    this.core.geometry.dispose();
-    (this.core.material as THREE.Material).dispose();
-    this.glow.geometry.dispose();
-    (this.glow.material as THREE.Material).dispose();
+    this.material.dispose();
   }
 }

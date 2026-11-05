@@ -34,6 +34,7 @@ export class HUD {
         <div class="boss-bar-hp" data-boss-hp></div>
       </div>
       <div class="hud-top">
+        <div class="hud-brand"><b>星兽突围</b><span>突围中</span></div>
         <div class="hud-stat"><div class="label">时间</div><div class="value" data-time>0:00</div></div>
         <div class="hud-stat"><div class="label">等级</div><div class="value" data-level>1</div></div>
         <div class="hud-stat"><div class="label">击杀</div><div class="value" data-kills>0</div></div>

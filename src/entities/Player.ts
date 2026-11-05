@@ -12,13 +12,11 @@ import {
   type WeaponTier,
 } from '../data/weapons';
 import { BALANCE, xpToNextForLevel } from '../data/balance';
-import { buildFalcon, buildFox, buildTurtle, stdMat } from '../visual/builders';
-import { getCharAccentTexture, getCharBodyTexture } from '../visual/textures';
+import { PixelActor } from '../visual/sprites';
+import { makeGroundRing, makeShadow } from '../visual/pixelScene';
 
 export class Player {
   readonly group: THREE.Group;
-  /** 主躯干网格（保留兼容：发光闪白挂在 flashMat） */
-  readonly body: THREE.Mesh;
   readonly stats: MutableStats;
   readonly weaponKind: CharacterDef['weaponKind'];
   readonly accent: number;
@@ -38,17 +36,12 @@ export class Player {
   slowTimer = 0;
   slowFactor = 1;
   lastDamageTaken = 0;
-  private flashMat: THREE.MeshStandardMaterial;
-  private baseEmissive: number;
+  private hurtFlash = 0;
   private pulseTimer = 0;
   private readonly modelRoot: THREE.Group;
   private animTime = 0;
-  private readonly animParts: {
-    tail?: THREE.Object3D;
-    ears?: THREE.Object3D[];
-    shell?: THREE.Object3D;
-    wings?: THREE.Object3D[];
-  } = {};
+  private readonly actor: PixelActor;
+  private readonly footRing: THREE.Mesh;
 
   constructor(def: CharacterDef) {
     this.characterId = def.id;
@@ -72,61 +65,15 @@ export class Player {
 
     this.group = new THREE.Group();
     this.group.position.set(0, 0, 0);
+    this.actor = new PixelActor(def.shape, undefined, 5);
     this.modelRoot = new THREE.Group();
+    this.modelRoot.add(this.actor.sprite);
     this.group.add(this.modelRoot);
 
-    const bodyMap = getCharBodyTexture(def.shape, def.color, def.accent);
-    const accentMap = getCharAccentTexture(def.shape, def.color, def.accent);
-    const mat = stdMat(def.color, { ei: 0.32, rough: 0.42, metal: 0.22, map: bodyMap });
-    this.flashMat = mat;
-    this.baseEmissive = 0.32;
-
-    let rig: THREE.Group;
-    if (def.shape === 'fox') {
-      const built = buildFox(def.color, def.accent, mat, accentMap);
-      rig = built.rig;
-      this.animParts.tail = built.anim.tail;
-      this.animParts.ears = built.anim.ears;
-    } else if (def.shape === 'turtle') {
-      const built = buildTurtle(def.color, def.accent, mat, accentMap);
-      rig = built.rig;
-      this.animParts.shell = built.anim.shell;
-    } else {
-      const built = buildFalcon(def.color, def.accent, mat, accentMap);
-      rig = built.rig;
-      this.animParts.wings = built.anim.wings;
-    }
-    this.modelRoot.add(rig);
-
-    // body 指向第一件 Mesh，供旧代码引用；旋转改走 modelRoot
-    let firstMesh: THREE.Mesh | null = null;
-    rig.traverse((o) => {
-      if (!firstMesh && o instanceof THREE.Mesh) firstMesh = o;
-    });
-    this.body = firstMesh ?? new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.1, 0.1), mat);
-
-    const shadow = new THREE.Mesh(
-      new THREE.CircleGeometry(0.62, 20),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.38 }),
-    );
-    shadow.rotation.x = -Math.PI / 2;
-    shadow.position.y = 0.02;
+    const shadow = makeShadow(Math.max(0.85, this.actor.width * 0.78));
     this.group.add(shadow);
-
-    // 脚下主题光环
-    const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.5, 0.68, 28),
-      new THREE.MeshBasicMaterial({
-        color: def.accent,
-        transparent: true,
-        opacity: 0.35,
-        side: THREE.DoubleSide,
-        depthWrite: false,
-      }),
-    );
-    ring.rotation.x = -Math.PI / 2;
-    ring.position.y = 0.04;
-    this.group.add(ring);
+    this.footRing = makeGroundRing(0.78, def.accent, 0.62);
+    this.group.add(this.footRing);
   }
 
   get weaponForm(): WeaponForm {
@@ -149,8 +96,6 @@ export class Player {
     if (this.weaponKind === 'aura') {
       this.stats.auraRadius += form.tier === 1 ? 0.35 : 0.25;
     }
-    this.baseEmissive = 0.32 + this.weaponTier * 0.14;
-    this.flashMat.emissiveIntensity = this.baseEmissive;
     return form;
   }
 
@@ -183,6 +128,7 @@ export class Player {
   updateMovement(dt: number, mx: number, mz: number, lookX?: number, lookZ?: number): void {
     if (!this.alive) return;
     this.animTime += dt;
+    if (this.hurtFlash > 0) this.hurtFlash -= dt;
     if (this.slowTimer > 0) {
       this.slowTimer -= dt;
       if (this.slowTimer <= 0) {
@@ -192,7 +138,8 @@ export class Player {
     }
     const spd = this.stats.moveSpeed * (this.slowTimer > 0 ? this.slowFactor : 1);
     const len = Math.hypot(mx, mz);
-    if (len > 0) {
+    const moving = len > 0.05;
+    if (moving) {
       const nx = mx / len;
       const nz = mz / len;
       this.group.position.x += nx * spd * dt;
@@ -206,38 +153,19 @@ export class Player {
         this.facing.set(dx, 0, dz).normalize();
       }
     }
-    const angle = Math.atan2(this.facing.x, this.facing.z);
-    this.modelRoot.rotation.y = angle;
+    if (Math.abs(this.facing.x) > 0.12) this.actor.setFacing(this.facing.x > 0);
 
-    // 呼吸缩放 + 部件动画
-    const breath = 1 + Math.sin(this.animTime * 3.2) * 0.025;
-    this.modelRoot.scale.setScalar(breath);
-    if (this.animParts.tail) {
-      this.animParts.tail.rotation.y = Math.sin(this.animTime * 5) * 0.35;
-      this.animParts.tail.rotation.x = Math.sin(this.animTime * 3.5) * 0.12;
-    }
-    if (this.animParts.ears) {
-      for (let i = 0; i < this.animParts.ears.length; i++) {
-        this.animParts.ears[i].rotation.z = (i === 0 ? -0.35 : 0.35) + Math.sin(this.animTime * 4 + i) * 0.08;
-      }
-    }
-    if (this.animParts.shell) {
-      this.animParts.shell.position.y = 0.58 + Math.sin(this.animTime * 2.2) * 0.03;
-    }
-    if (this.animParts.wings) {
-      for (let i = 0; i < this.animParts.wings.length; i++) {
-        const sx = i === 0 ? -1 : 1;
-        this.animParts.wings[i].rotation.z = sx * (0.15 + Math.sin(this.animTime * 6) * 0.22);
-      }
-    }
+    const tier = 1 + this.weaponTier * 0.05;
+    const breath = 1 + Math.sin(this.animTime * 3.2) * 0.028;
+    this.modelRoot.scale.set(tier * breath, tier * breath, 1);
+    this.actor.place(this.animTime, moving);
+    const blink = this.invuln > 0 && Math.sin(this.invuln * 26) > 0.15;
+    this.actor.flash(this.hurtFlash > 0 ? 1 : 0);
+    this.actor.setOpacity(blink ? 0.42 : 1);
+    const ringMat = this.footRing.material as THREE.MeshBasicMaterial;
+    ringMat.opacity = 0.42 + Math.sin(this.animTime * 4) * 0.12;
 
-    if (this.invuln > 0) {
-      this.invuln -= dt;
-      this.flashMat.emissiveIntensity = this.baseEmissive + Math.sin(this.invuln * 40) * 0.6;
-    } else {
-      this.flashMat.emissiveIntensity = this.baseEmissive;
-    }
-
+    if (this.invuln > 0) this.invuln -= dt;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
   }
 
@@ -268,10 +196,8 @@ export class Player {
     }
     this.lastDamageTaken = applied;
     this.invuln = BALANCE.invulnOnHit;
-    this.flashMat.emissiveIntensity = 1.2;
-    if (this.stats.hp <= 0) {
-      this.stats.hp = 0;
-    }
+    this.hurtFlash = 0.12;
+    if (this.stats.hp <= 0) this.stats.hp = 0;
     return true;
   }
 
@@ -297,6 +223,7 @@ export class Player {
   }
 
   dispose(): void {
+    this.actor.dispose();
     this.group.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
         obj.geometry.dispose();

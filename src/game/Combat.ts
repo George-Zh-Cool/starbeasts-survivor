@@ -9,6 +9,7 @@ import type { Boss } from '../entities/Boss';
 import type { HostileProjectile } from '../entities/HostileProjectile';
 import { audio } from '../audio/Audio';
 import type { ObstacleField } from './Obstacles';
+import { makeGroundRing } from '../visual/pixelScene';
 
 export class Combat {
   private readonly projectiles: Projectile[];
@@ -67,16 +68,7 @@ export class Combat {
     if (this.auraMeshes.length !== rings) {
       this.clearAura();
       for (let i = 0; i < rings; i++) {
-        const geo = new THREE.RingGeometry(0.45, 1, 48);
-        const mat = new THREE.MeshBasicMaterial({
-          color: i === 0 ? player.accent : player.color,
-          transparent: true,
-          opacity: 0.35 - i * 0.05,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.rotation.x = -Math.PI / 2;
+        const mesh = makeGroundRing(1, i === 0 ? player.accent : player.color, 0.55 - i * 0.12);
         this.scene.add(mesh);
         this.auraMeshes.push(mesh);
       }
@@ -474,6 +466,7 @@ export class Combat {
           chainLeft: form.chainBounces,
           knockback: player.stats.knockback,
           crit,
+          style: player.characterId === 'windfalcon' ? 'shard' : 'flame',
         },
       );
       this.projectiles.push(p);

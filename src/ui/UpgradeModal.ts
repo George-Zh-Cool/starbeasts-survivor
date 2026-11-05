@@ -11,8 +11,9 @@ export class UpgradeModal {
     panel.className = 'panel';
     panel.style.width = 'min(760px, 94vw)';
     panel.innerHTML = `
-      <div class="upgrade-title">等级提升！</div>
-      <div class="upgrade-sub">从下列强化中选择一项（含词条 / 武器进化）</div>
+      <div class="shell-kicker">战斗暂停</div>
+      <div class="upgrade-title">拣一项强化</div>
+      <div class="upgrade-sub">星尘只够改一件事。进化、词条，或者直接变强。</div>
       <div class="upgrade-grid"></div>
     `;
     const grid = panel.querySelector('.upgrade-grid')!;

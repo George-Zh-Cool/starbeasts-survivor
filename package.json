@@ -2,7 +2,7 @@
   "name": "starbeasts-survivor",
   "version": "0.1.0",
   "private": true,
-  "description": "星兽突围 - 原创 3D 浏览器幸存者游戏原型",
+  "description": "星兽突围 - 原创像素风 2.5D 浏览器幸存者",
   "type": "module",
   "scripts": {
     "dev": "vite",

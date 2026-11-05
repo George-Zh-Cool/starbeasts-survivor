@@ -24,6 +24,7 @@ export class GameOver {
     this.overlay.className = 'overlay';
     this.overlay.innerHTML = `
       <div class="panel gameover-panel">
+        <div class="shell-kicker">这一局结束</div>
         <h1>星兽陨落</h1>
         <div class="subtitle">${stats.characterName} 的突围结束了</div>
         <div class="stats-list">

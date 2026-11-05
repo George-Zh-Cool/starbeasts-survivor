@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { makeGroundRing } from '../visual/pixelScene';
 
 export type ObstacleKind = 'rock' | 'crystal';
 
@@ -64,88 +65,9 @@ export class ObstacleField {
     group.position.set(x, 0, z);
 
     if (kind === 'rock') {
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0x6a738c,
-        emissive: 0x1a2030,
-        emissiveIntensity: 0.18,
-        roughness: 0.9,
-        metalness: 0.12,
-      });
-      const body = new THREE.Mesh(new THREE.DodecahedronGeometry(radius, 0), mat);
-      body.position.y = radius * 0.72;
-      body.rotation.set(Math.random(), Math.random(), Math.random());
-      body.castShadow = true;
-      body.receiveShadow = true;
-      group.add(body);
-      // 堆叠碎石
-      for (let i = 0; i < 3; i++) {
-        const chip = new THREE.Mesh(
-          new THREE.TetrahedronGeometry(radius * (0.28 + Math.random() * 0.2), 0),
-          mat.clone(),
-        );
-        const a = (i / 3) * Math.PI * 2 + Math.random();
-        chip.position.set(
-          Math.cos(a) * radius * 0.45,
-          radius * (0.35 + i * 0.35),
-          Math.sin(a) * radius * 0.4,
-        );
-        chip.rotation.set(Math.random(), Math.random(), Math.random());
-        chip.castShadow = true;
-        group.add(chip);
-      }
-      const tip = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.35, radius * 0.7, 5), mat.clone());
-      tip.position.set(radius * 0.1, radius * 1.45, -radius * 0.05);
-      tip.castShadow = true;
-      group.add(tip);
+      this.buildRock(group, radius);
     } else {
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0x7bdff2,
-        emissive: 0x4cc9f0,
-        emissiveIntensity: 0.6,
-        roughness: 0.22,
-        metalness: 0.5,
-        transparent: true,
-        opacity: 0.9,
-      });
-      const body = new THREE.Mesh(new THREE.OctahedronGeometry(radius, 0), mat);
-      body.position.y = radius * 1.05;
-      body.castShadow = true;
-      group.add(body);
-      // 环绕小晶簇
-      for (let i = 0; i < 3; i++) {
-        const a = (i / 3) * Math.PI * 2;
-        const shard = new THREE.Mesh(
-          new THREE.TetrahedronGeometry(radius * 0.32, 0),
-          mat.clone(),
-        );
-        shard.position.set(Math.cos(a) * radius * 0.55, radius * 0.55, Math.sin(a) * radius * 0.55);
-        shard.castShadow = true;
-        group.add(shard);
-      }
-      const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(radius * 0.4, 8, 6),
-        new THREE.MeshBasicMaterial({
-          color: 0xa0e9ff,
-          transparent: true,
-          opacity: 0.4,
-          depthWrite: false,
-        }),
-      );
-      glow.position.y = radius * 1.05;
-      group.add(glow);
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(radius * 0.7, radius * 1.05, 20),
-        new THREE.MeshBasicMaterial({
-          color: 0x7bdff2,
-          transparent: true,
-          opacity: 0.28,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        }),
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.05;
-      group.add(ring);
+      this.buildCrystal(group, radius);
     }
 
     const o: Obstacle = {
@@ -165,6 +87,47 @@ export class ObstacleField {
     this.obstacles.push(o);
     this.scene.add(group);
     return o;
+  }
+
+  private buildRock(group: THREE.Group, radius: number): void {
+    const seed = Math.floor(radius * 1000 + group.position.x * 13 + group.position.z * 17);
+    const rnd = (i: number) => {
+      const x = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
+      return x - Math.floor(x);
+    };
+    const colors = [0x3e465c, 0x626c86, 0x2c3348, 0x8b93a8, 0x6e6758];
+    const cell = radius * 0.42;
+    for (let i = 0; i < 7; i++) {
+      const sx = cell * (0.85 + rnd(i) * 0.65);
+      const sy = cell * (0.75 + rnd(i + 20) * 0.85);
+      const sz = cell * (0.85 + rnd(i + 40) * 0.55);
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(sx, sy, sz),
+        new THREE.MeshLambertMaterial({ color: colors[i % colors.length] }),
+      );
+      mesh.position.set((rnd(i + 3) - 0.5) * radius * 0.8, sy * 0.5 + i * cell * 0.36, (rnd(i + 8) - 0.5) * radius * 0.7);
+      mesh.rotation.y = (Math.floor(rnd(i + 11) * 4) * Math.PI) / 2;
+      group.add(mesh);
+    }
+  }
+
+  private buildCrystal(group: THREE.Group, radius: number): void {
+    const specs = [
+      { h: radius * 2.15, w: radius * 0.42, x: 0, z: 0, color: 0xdffbff, em: 0x3ec8e4 },
+      { h: radius * 1.45, w: radius * 0.32, x: radius * 0.4, z: radius * 0.1, color: 0x7ee7f5, em: 0x1a7a90 },
+      { h: radius * 1.15, w: radius * 0.28, x: -radius * 0.38, z: -radius * 0.12, color: 0xb8f6ff, em: 0x145868 },
+      { h: radius * 0.7, w: radius * 0.26, x: radius * 0.08, z: -radius * 0.4, color: 0x49c4d8, em: 0x0e4a58 },
+    ];
+    const mats: THREE.MeshLambertMaterial[] = [];
+    for (const s of specs) {
+      const mat = new THREE.MeshLambertMaterial({ color: s.color, emissive: s.em, emissiveIntensity: 0.55 });
+      mats.push(mat);
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.w), mat);
+      mesh.position.set(s.x, s.h * 0.5, s.z);
+      group.add(mesh);
+    }
+    group.add(makeGroundRing(radius * 1.05, 0x7ee7f5, 0.4));
+    group.userData.crystalMats = mats;
   }
 
   clear(): void {
@@ -281,24 +244,20 @@ export class ObstacleField {
         o.mesh.position.y = Math.max(0, o.mesh.position.y - dt * 0.6);
       }
       if (o.kind === 'crystal') {
-        // 缓慢自转
-        o.mesh.rotation.y += dt * 0.6;
-        const pulse = 0.5 + Math.sin(performance.now() * 0.004 + o.id) * 0.15;
-        o.mesh.traverse((obj) => {
-          if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshStandardMaterial) {
-            obj.material.emissiveIntensity = pulse;
-          }
-        });
+        const flash = (o.mesh.userData.flash as number) || 0;
+        const next = Math.max(0, flash - dt);
+        o.mesh.userData.flash = next;
+        const mats = o.mesh.userData.crystalMats as THREE.MeshLambertMaterial[] | undefined;
+        const pulse = next > 0 ? 1.7 : 0.4 + Math.sin(performance.now() * 0.004 + o.id) * 0.18;
+        if (mats) {
+          for (const m of mats) m.emissiveIntensity = pulse;
+        }
       }
     }
   }
 
   private flashCrystal(o: Obstacle): void {
-    o.mesh.traverse((obj) => {
-      if (obj instanceof THREE.Mesh && obj.material instanceof THREE.MeshStandardMaterial) {
-        obj.material.emissiveIntensity = 1.4;
-      }
-    });
+    o.mesh.userData.flash = 0.16;
     const ratio = Math.max(0.35, o.hp / o.maxHp);
     o.mesh.scale.setScalar(0.85 + ratio * 0.15);
   }

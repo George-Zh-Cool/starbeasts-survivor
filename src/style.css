@@ -11,7 +11,8 @@ body,
   height: 100%;
   overflow: hidden;
   background: #0a0e1a;
-  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+  -webkit-font-smoothing: none;
   color: #e8ecf8;
   user-select: none;
   touch-action: none;
@@ -804,4 +805,316 @@ body,
   letter-spacing: 0.02em;
   pointer-events: none;
   white-space: pre-wrap;
+}
+
+/* —— 像素壳：粗边、直角、点阵标题。不改点击穿透规则。 —— */
+button.char-card,
+button.upgrade-card,
+button.btn,
+button.audio-toggle {
+  font-family: inherit;
+  color: inherit;
+  text-align: left;
+}
+
+.overlay {
+  background-color: rgba(8, 6, 16, 0.78);
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 2px, transparent 2px);
+  background-size: 12px 12px;
+}
+
+.panel {
+  width: min(980px, 96vw);
+  border-radius: 0;
+  border: 4px solid #efe6c8;
+  background: #161226;
+  box-shadow: 8px 8px 0 #07060c;
+}
+
+.panel h1 {
+  background: none;
+  background-clip: border-box;
+  -webkit-background-clip: border-box;
+  color: #f4efe2;
+  -webkit-text-fill-color: #f4efe2;
+  text-shadow: 4px 4px 0 #b33a24;
+  letter-spacing: 4px;
+  font-weight: 900;
+}
+
+.shell-kicker,
+.shell-step,
+.bestiary-label {
+  color: #f2c14e;
+  font-weight: 800;
+  letter-spacing: 2px;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.shell-step {
+  margin: 8px 0 10px;
+}
+
+.pixel-wordmark {
+  display: block;
+  height: 28px;
+  width: auto;
+  margin: 6px 0 10px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+.panel .subtitle,
+.hint,
+.menu-highs {
+  color: #d9d0c0;
+}
+
+.menu-highs,
+.stats-list,
+.hud-stat,
+.bars,
+.paused-banner,
+.event-banner,
+.audio-toggle,
+.boss-bar-track,
+.bar-track,
+.tag,
+.rarity,
+.char-card,
+.upgrade-card,
+.btn,
+.vjoy-base,
+.vjoy-knob,
+.hud-debug,
+.hud-brand {
+  border-radius: 0;
+}
+
+.char-card,
+.upgrade-card {
+  background: #1c1830;
+  border: 4px solid #2e2944;
+  box-shadow: 4px 4px 0 #07060c;
+}
+
+.char-card::before {
+  display: none;
+}
+
+.char-card:hover,
+.upgrade-card:hover {
+  transform: translate(-2px, -2px);
+  border-color: #f2c14e;
+  background: #261c38;
+  box-shadow: 6px 6px 0 #07060c;
+}
+
+.char-card .swatch {
+  height: 120px;
+  border-radius: 0;
+  border: 3px solid #0c0a12;
+  background-color: #100e1c;
+  background-image:
+    linear-gradient(#241c38 1px, transparent 1px),
+    linear-gradient(90deg, #241c38 1px, transparent 1px);
+  background-size: 8px 8px;
+  box-shadow: none;
+}
+
+.pixel-portrait,
+.bestiary-item img {
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: none;
+}
+
+.pixel-portrait {
+  width: 112px;
+  height: auto;
+}
+
+.char-card .pick-cue {
+  border-radius: 0;
+  background: #f2c14e;
+  color: #1a1020;
+  box-shadow: 3px 3px 0 #07060c;
+}
+
+.tag {
+  background: #14343a;
+  border: 2px solid #3ecfb8;
+  color: #d8fff6;
+}
+
+.bestiary {
+  margin-top: 16px;
+}
+
+.bestiary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bestiary-item {
+  width: 92px;
+  min-height: 84px;
+  padding: 6px;
+  background: #100e1c;
+  border: 3px solid #2e2944;
+  box-shadow: 3px 3px 0 #07060c;
+  text-align: center;
+}
+
+.bestiary-item img {
+  width: 64px;
+  height: auto;
+  display: block;
+  margin: 0 auto 4px;
+}
+
+.bestiary-item span {
+  display: block;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.btn {
+  border-radius: 0;
+  background: #f2c14e;
+  color: #1a1020;
+  border: 3px solid #1a1020;
+  box-shadow: 4px 4px 0 #07060c;
+}
+
+.btn.secondary {
+  background: #241c38;
+  color: #f4efe2;
+  border: 3px solid #efe6c8;
+  box-shadow: 4px 4px 0 #07060c;
+}
+
+.upgrade-card.evolve-card {
+  border-color: #f2c14e;
+  background: #2a1c14;
+}
+
+.upgrade-card.trait-card {
+  border-color: #3ecfb8;
+}
+
+.rarity.common { background: #2a2640; color: #f4efe2; border: 2px solid #efe6c8; }
+.rarity.rare { background: #14343a; color: #9ff3ea; border: 2px solid #3ecfb8; }
+.rarity.epic { background: #3a1830; color: #ffd0dc; border: 2px solid #ff5a6a; }
+
+.hud-top {
+  flex-wrap: wrap;
+}
+
+.hud-brand,
+.hud-stat {
+  background: #171426;
+  border: 3px solid #efe6c8;
+  box-shadow: 3px 3px 0 #07060c;
+  backdrop-filter: none;
+}
+
+.hud-brand {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 92px;
+  padding: 6px 10px;
+}
+
+.hud-brand b {
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+.hud-brand span {
+  font-size: 11px;
+  color: #f2c14e;
+}
+
+.hud-stat .value,
+.bar-text,
+.boss-bar-hp {
+  font-family: ui-monospace, "Cascadia Mono", "Sarasa Mono SC", monospace;
+}
+
+.bars {
+  background: #171426;
+  border: 4px solid #efe6c8;
+  box-shadow: 4px 4px 0 #07060c;
+  backdrop-filter: none;
+}
+
+.bar-track,
+.boss-bar-track {
+  height: 16px;
+  background: #0c0a12;
+  border: 3px solid #0c0a12;
+  box-shadow: none;
+}
+
+.bar-fill,
+.boss-bar-fill {
+  border-radius: 0;
+}
+
+.bar-fill.hp,
+.boss-bar-fill {
+  background: #ff5a6a;
+  box-shadow: none;
+}
+
+.bar-fill.xp {
+  background: #3ecfb8;
+  box-shadow: none;
+}
+
+.paused-banner,
+.event-banner,
+.audio-toggle {
+  background: #171426;
+  border: 3px solid #efe6c8;
+  box-shadow: 3px 3px 0 #07060c;
+  backdrop-filter: none;
+}
+
+.event-banner.boss { background: #3a1020; color: #ffd6de; border-color: #ff5a6a; }
+.event-banner.tide { background: #24143a; color: #ead7ff; border-color: #c77dff; }
+.event-banner.reward { background: #f2c14e; color: #1a1020; border-color: #1a1020; }
+
+.float-text {
+  font-family: ui-monospace, "Cascadia Mono", monospace;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.vjoy-base {
+  background: rgba(18, 16, 32, 0.78);
+  border: 4px solid #efe6c8;
+  box-shadow: 4px 4px 0 #07060c;
+}
+
+.vjoy-knob {
+  background: #f2c14e;
+  border: 3px solid #1a1020;
+  box-shadow: none;
+}
+
+.stats-list {
+  background: #100e1c;
+  border: 3px solid #2e2944;
+}
+
+.hud-debug {
+  background: #100e1c;
+  border: 3px solid #efe6c8;
+  color: #d5ecff;
 }

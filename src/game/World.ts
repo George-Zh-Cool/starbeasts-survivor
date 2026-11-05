@@ -1,128 +1,46 @@
 import * as THREE from 'three';
-import { getGroundDetailTexture, getGroundTexture } from '../visual/textures';
+import { createBattlefield } from '../visual/pixelScene';
 
 export class World {
   readonly scene: THREE.Scene;
   readonly camera: THREE.PerspectiveCamera;
   readonly renderer: THREE.WebGLRenderer;
-  private readonly grid: THREE.GridHelper;
   private readonly ground: THREE.Mesh;
-  private readonly hemi: THREE.HemisphereLight;
-  private readonly dir: THREE.DirectionalLight;
-  private readonly groundTex: THREE.CanvasTexture;
+  private readonly sky: THREE.Mesh;
+  private readonly marks: THREE.Mesh;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x070b16);
-    this.scene.fog = new THREE.FogExp2(0x0a1224, 0.018);
+    this.scene.background = new THREE.Color(0x070814);
+    this.scene.fog = new THREE.FogExp2(0x14182e, 0.013);
 
-    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 120);
+    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 140);
     this.camera.position.set(0, 18, 14);
     this.camera.lookAt(0, 0, 0);
 
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      antialias: false,
       powerPreference: 'high-performance',
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.shadowMap.enabled = false;
+    this.renderer.toneMapping = THREE.NoToneMapping;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    this.hemi = new THREE.HemisphereLight(0x9eb6ff, 0x1a1020, 0.7);
-    this.scene.add(this.hemi);
+    const hemi = new THREE.HemisphereLight(0xb7c6ff, 0x1a1424, 1.05);
+    this.scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xffe6c4, 0.85);
+    dir.position.set(12, 22, 8);
+    this.scene.add(dir);
 
-    this.dir = new THREE.DirectionalLight(0xffe6c8, 1.15);
-    this.dir.position.set(12, 24, 8);
-    this.dir.castShadow = true;
-    this.dir.shadow.mapSize.set(1024, 1024);
-    this.dir.shadow.camera.near = 1;
-    this.dir.shadow.camera.far = 60;
-    this.dir.shadow.camera.left = -25;
-    this.dir.shadow.camera.right = 25;
-    this.dir.shadow.camera.top = 25;
-    this.dir.shadow.camera.bottom = -25;
-    this.scene.add(this.dir);
-
-    // 天穹淡色半球
-    const sky = new THREE.Mesh(
-      new THREE.SphereGeometry(90, 24, 16),
-      new THREE.MeshBasicMaterial({
-        color: 0x10182c,
-        side: THREE.BackSide,
-        fog: false,
-      }),
-    );
-    this.scene.add(sky);
-
-    this.groundTex = getGroundTexture();
-
-    const groundMat = new THREE.MeshStandardMaterial({
-      map: this.groundTex,
-      color: 0xffffff,
-      roughness: 0.94,
-      metalness: 0.04,
-    });
-    this.ground = new THREE.Mesh(new THREE.PlaneGeometry(120, 120), groundMat);
-    this.ground.rotation.x = -Math.PI / 2;
-    this.ground.receiveShadow = true;
+    const field = createBattlefield();
+    this.sky = field.sky;
+    this.ground = field.ground;
+    this.marks = field.marks;
+    this.scene.add(this.sky);
     this.scene.add(this.ground);
-
-    // 第二层弱细节噪点（半透明，不抢戏）
-    const detailTex = getGroundDetailTexture();
-    const detail = new THREE.Mesh(
-      new THREE.PlaneGeometry(120, 120),
-      new THREE.MeshBasicMaterial({
-        map: detailTex,
-        transparent: true,
-        opacity: 0.28,
-        depthWrite: false,
-      }),
-    );
-    detail.rotation.x = -Math.PI / 2;
-    detail.position.y = 0.012;
-    this.scene.add(detail);
-
-    this.grid = new THREE.GridHelper(80, 40, 0x334066, 0x1a2238);
-    this.grid.position.y = 0.02;
-    const gmat = this.grid.material as THREE.Material | THREE.Material[];
-    if (Array.isArray(gmat)) {
-      gmat.forEach((m) => {
-        m.transparent = true;
-        m.opacity = 0.35;
-      });
-    } else {
-      gmat.transparent = true;
-      gmat.opacity = 0.35;
-    }
-    this.scene.add(this.grid);
-
-    // Decorative rings — 星环氛围
-    for (let i = 1; i <= 3; i++) {
-      const ring = new THREE.Mesh(
-        new THREE.RingGeometry(8 * i - 0.1, 8 * i + 0.02, 64),
-        new THREE.MeshBasicMaterial({
-          color: i === 2 ? 0x5a7ab8 : 0x3a4a78,
-          transparent: true,
-          opacity: 0.14 + i * 0.02,
-          side: THREE.DoubleSide,
-          depthWrite: false,
-        }),
-      );
-      ring.rotation.x = -Math.PI / 2;
-      ring.position.y = 0.03;
-      this.scene.add(ring);
-    }
-
-    // 边缘雾灯：低矮点光暗示地平线
-    const rim = new THREE.PointLight(0x4a6cff, 0.55, 55, 2);
-    rim.position.set(0, 3, -28);
-    this.scene.add(rim);
-    const rim2 = new THREE.PointLight(0xff6b4a, 0.35, 45, 2);
-    rim2.position.set(22, 2.5, 10);
-    this.scene.add(rim2);
+    this.scene.add(this.marks);
 
     this.resize();
     window.addEventListener('resize', this.resize);
@@ -165,8 +83,11 @@ export class World {
   dispose(): void {
     window.removeEventListener('resize', this.resize);
     this.renderer.dispose();
-    this.ground.geometry.dispose();
-    (this.ground.material as THREE.Material).dispose();
-    // groundTex 来自共享缓存，不在此 dispose
+    for (const mesh of [this.ground, this.sky, this.marks]) {
+      mesh.geometry.dispose();
+      const mat = mesh.material;
+      if (Array.isArray(mat)) mat.forEach((m) => m.dispose());
+      else mat.dispose();
+    }
   }
 }
