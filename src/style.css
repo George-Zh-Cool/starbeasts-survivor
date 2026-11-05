@@ -38,6 +38,19 @@ body,
   pointer-events: auto;
 }
 
+/* Specificity 1,1,0 beats #ui-root > * (1,0,0). The full-screen float
+   layer and HUD must stay click-through; menus and real controls opt back in. */
+#ui-root .float-layer,
+#ui-root .hud {
+  pointer-events: none;
+}
+
+#ui-root .overlay,
+#ui-root .audio-toggle,
+#ui-root .vjoy {
+  pointer-events: auto;
+}
+
 /* HUD */
 .hud {
   position: absolute;
@@ -148,6 +161,7 @@ body,
 .overlay {
   position: absolute;
   inset: 0;
+  z-index: 50;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -709,6 +723,22 @@ body,
 .char-card:hover .char-icon {
   transform: scale(1.06) translateY(-2px);
   transition: transform 0.18s ease;
+}
+.char-card .pick-cue {
+  position: relative;
+  z-index: 1;
+  margin-top: 12px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #1a1020;
+  background: linear-gradient(90deg, #ffd166, #ff9f1c);
+  border-radius: 999px;
+  padding: 7px 12px;
+}
+.char-card:hover .pick-cue {
+  filter: brightness(1.06);
 }
 
 .hud-stat {

@@ -68,6 +68,7 @@ export class CharacterSelect {
         <h3>${c.name}</h3>
         <p><strong>${c.title}</strong> — ${c.description}</p>
         <div class="tags">${c.tags.map((t) => `<span class="tag">${t}</span>`).join('')}</div>
+        <div class="pick-cue">点击出战</div>
       `;
       card.addEventListener('click', () => {
         audio.unlock();
