@@ -424,8 +424,8 @@ export class Boss {
   takeDamage(amount: number): boolean {
     if (!this.active) return false;
     this.hp -= amount;
-    this.hitFlash = 0.14;
-    this.punch = 1.16;
+    this.hitFlash = 0.2;
+    this.punch = 1.32;
     this.updateHpBar();
     if (this.hp <= 0) {
       this.despawn();

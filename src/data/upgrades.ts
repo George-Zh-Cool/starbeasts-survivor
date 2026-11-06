@@ -1,4 +1,4 @@
-import { getWeaponForm, type WeaponTier } from './weapons';
+import { getWeaponForm, type WeaponBranch, type WeaponTier } from './weapons';
 
 export type UpgradeId =
   | 'damage'
@@ -16,6 +16,14 @@ export type UpgradeId =
   | 'xpboost'
   | 'shield'
   | 'splash'
+  | 'armor'
+  | 'hunt'
+  | 'nova'
+  | 'reach'
+  | 'mend'
+  | 'edge'
+  | 'guardstep'
+  | 'barrage'
   // 进化（按角色在选池时动态注入）
   | 'evolve';
 
@@ -29,6 +37,10 @@ export interface UpgradeDef {
   kind: UpgradeKind;
   /** 升级卡底部协同提示（可选） */
   synergyHint?: string;
+  /** 路线标签，出现在稀有度旁边 */
+  tag?: string;
+  /** 终阶进化卡指定甲 / 乙 */
+  evolveBranch?: WeaponBranch;
   /** Apply stacked level (1-based after pick) — evolve handled externally */
   apply: (stats: MutableStats, level: number) => void;
 }
@@ -54,11 +66,35 @@ export interface MutableStats {
   shield: number;
   splashRadius: number;
   splashRatio: number;
+  /** 受伤倍率，1 为原伤，越低越硬 */
+  armor: number;
+  /** 对精英和 Boss 的额外伤害 */
+  bossDmg: number;
+  /** 击杀爆开半径，0 为关闭 */
+  killNova: number;
+  killNovaRatio: number;
+  /** 每秒回复 */
+  regen: number;
+  /** 弹道寿命加成（秒） */
+  projLifeBonus: number;
 }
 
 export function createBaseTraitStats(): Pick<
   MutableStats,
-  'critChance' | 'critMul' | 'knockback' | 'xpMul' | 'shieldMax' | 'shield' | 'splashRadius' | 'splashRatio'
+  | 'critChance'
+  | 'critMul'
+  | 'knockback'
+  | 'xpMul'
+  | 'shieldMax'
+  | 'shield'
+  | 'splashRadius'
+  | 'splashRatio'
+  | 'armor'
+  | 'bossDmg'
+  | 'killNova'
+  | 'killNovaRatio'
+  | 'regen'
+  | 'projLifeBonus'
 > {
   return {
     critChance: 0,
@@ -69,6 +105,12 @@ export function createBaseTraitStats(): Pick<
     shield: 0,
     splashRadius: 0,
     splashRatio: 0,
+    armor: 1,
+    bossDmg: 0,
+    killNova: 0,
+    killNovaRatio: 0,
+    regen: 0,
+    projLifeBonus: 0,
   };
 }
 
@@ -225,6 +267,112 @@ export const UPGRADES: UpgradeDef[] = [
       s.splashRatio = Math.min(0.7, s.splashRatio + 0.25);
     },
   },
+  {
+    id: 'armor',
+    name: '晶壳',
+    description: '受到的伤害 -10%（最多减到约一半）',
+    rarity: 'rare',
+    kind: 'trait',
+    tag: '生存',
+    synergyHint: '与「星愈脉」协同：潮生甲',
+    apply: (s) => {
+      s.armor = Math.max(0.55, s.armor * 0.9);
+    },
+  },
+  {
+    id: 'hunt',
+    name: '猎核',
+    description: '对精英和 Boss 的伤害 +20%',
+    rarity: 'rare',
+    kind: 'trait',
+    tag: '输出',
+    synergyHint: '与「暴击晶核」协同：处刑印记',
+    apply: (s) => {
+      s.bossDmg = Math.min(1, s.bossDmg + 0.2);
+    },
+  },
+  {
+    id: 'nova',
+    name: '余烬爆',
+    description: '击杀时炸开一小圈，伤到旁边的敌人',
+    rarity: 'epic',
+    kind: 'trait',
+    tag: '清场',
+    synergyHint: '与「碎星溅射」协同：余烬连锁',
+    apply: (s) => {
+      if (s.killNova <= 0) {
+        s.killNova = 2.15;
+        s.killNovaRatio = 0.42;
+      } else {
+        s.killNova = Math.min(3.4, s.killNova + 0.28);
+        s.killNovaRatio = Math.min(0.62, s.killNovaRatio + 0.08);
+      }
+    },
+  },
+  {
+    id: 'reach',
+    name: '延程',
+    description: '弹道更快、飞得更远（环攻改为环半径略增）',
+    rarity: 'common',
+    kind: 'stat',
+    tag: '输出',
+    apply: (s) => {
+      s.projectileSpeed *= 1.12;
+      s.projLifeBonus = Math.min(2, s.projLifeBonus + 0.4);
+      s.auraRadius += 0.2;
+    },
+  },
+  {
+    id: 'mend',
+    name: '星愈脉',
+    description: '立即回复 10 点生命，之后每秒缓慢再生',
+    rarity: 'rare',
+    kind: 'trait',
+    tag: '生存',
+    synergyHint: '与「晶壳」协同：潮生甲',
+    apply: (s) => {
+      s.hp = Math.min(s.maxHp, s.hp + 10);
+      s.regen = Math.min(3, s.regen + 0.55);
+    },
+  },
+  {
+    id: 'edge',
+    name: '锋芒',
+    description: '攻击 +10%，暴击率 +4%',
+    rarity: 'common',
+    kind: 'stat',
+    tag: '输出',
+    apply: (s) => {
+      s.damage *= 1.1;
+      s.critChance = Math.min(0.72, s.critChance + 0.04);
+    },
+  },
+  {
+    id: 'guardstep',
+    name: '守势步',
+    description: '移速 +6%，受到的伤害再 -6%',
+    rarity: 'rare',
+    kind: 'stat',
+    tag: '生存',
+    apply: (s) => {
+      s.moveSpeed *= 1.06;
+      s.armor = Math.max(0.55, s.armor * 0.94);
+    },
+  },
+  {
+    id: 'barrage',
+    name: '暴风核心',
+    description: '发射数 +1，攻击间隔 -6%，伤害 +6%（环攻半径也略增）',
+    rarity: 'epic',
+    kind: 'stat',
+    tag: '输出',
+    apply: (s) => {
+      s.projectileCount += 1;
+      s.attackInterval *= 0.94;
+      s.damage *= 1.06;
+      s.auraRadius += 0.12;
+    },
+  },
 ];
 
 /** 协同定义：拥有全部 required 时生效 */
@@ -267,19 +415,56 @@ export const SYNERGIES: SynergyDef[] = [
       s.lifeSteal += 0.02;
     },
   },
+  {
+    id: 'execution',
+    name: '处刑印记',
+    required: ['crit', 'hunt'],
+    description: '对精英和 Boss 再 +16% 伤害，暴击伤害 +0.2',
+    applyOnce: (s) => {
+      s.bossDmg = Math.min(1.3, s.bossDmg + 0.16);
+      s.critMul += 0.2;
+    },
+  },
+  {
+    id: 'tide_armor',
+    name: '潮生甲',
+    required: ['armor', 'mend'],
+    description: '再减伤 6%，再生加快',
+    applyOnce: (s) => {
+      s.armor = Math.max(0.55, s.armor * 0.94);
+      s.regen = Math.min(3.6, s.regen + 0.6);
+    },
+  },
+  {
+    id: 'ember_chain',
+    name: '余烬连锁',
+    required: ['nova', 'splash'],
+    description: '击杀爆炸更大，溅射更疼',
+    applyOnce: (s) => {
+      s.killNova = Math.min(4.2, Math.max(2.2, s.killNova) * 1.25);
+      s.splashRatio = Math.min(0.8, s.splashRatio + 0.08);
+    },
+  },
 ];
 
-export function buildEvolveUpgrade(characterId: string, currentTier: WeaponTier): UpgradeDef | null {
+export function buildEvolveUpgrade(
+  characterId: string,
+  currentTier: WeaponTier,
+  branch: WeaponBranch = 'a',
+): UpgradeDef | null {
   if (currentTier >= 2) return null;
   const next = (currentTier + 1) as WeaponTier;
-  const form = getWeaponForm(characterId, next);
+  const form = getWeaponForm(characterId, next, next === 2 ? branch : 'a');
+  const branchLabel = next < 2 ? '一阶' : branch === 'b' ? '终阶 · 乙' : '终阶 · 甲';
   return {
     id: 'evolve',
     name: `武器进化 · ${form.name}`,
     description: form.description,
     rarity: 'epic',
     kind: 'evolve',
-    synergyHint: `进化至形态 ${next + 1}/3`,
+    tag: '进化',
+    evolveBranch: next === 2 ? branch : 'a',
+    synergyHint: `${branchLabel}。14 级前不选，会自动走上甲路线。`,
     apply: () => {
       /* handled by Game / Player.evolveWeapon */
     },
@@ -306,9 +491,10 @@ export function pickRandomUpgrades(count: number, ctx?: UpgradePickContext): Upg
   for (const u of pool) {
     let w = u.rarity === 'epic' ? 2 : u.rarity === 'rare' ? 3 : 5;
     // 生存向略加权，降低前期输出膨胀
-    if (u.id === 'maxhp' || u.id === 'movespeed' || u.id === 'shield' || u.id === 'pickup') w += 2;
-    if (u.id === 'damage' || u.id === 'firerate') w = Math.max(2, w - 1);
+    if (u.id === 'maxhp' || u.id === 'movespeed' || u.id === 'shield' || u.id === 'pickup' || u.id === 'mend' || u.id === 'armor') w += 2;
+    if (u.id === 'damage' || u.id === 'firerate' || u.id === 'barrage') w = Math.max(2, w - 1);
     if (u.kind === 'trait' && !owned.has(u.id)) w += 2;
+    if ((u.id === 'hunt' || u.id === 'nova' || u.id === 'edge') && !owned.has(u.id)) w += 1;
     // 已有一半协同时提高另一半出现率
     for (const syn of SYNERGIES) {
       if (ctx?.activatedSynergies.has(syn.id)) continue;
@@ -320,27 +506,40 @@ export function pickRandomUpgrades(count: number, ctx?: UpgradePickContext): Upg
     for (let i = 0; i < w; i++) weighted.push(u);
   }
 
-  const evolve = ctx ? buildEvolveUpgrade(ctx.characterId, ctx.weaponTier) : null;
+  const keyOf = (u: UpgradeDef) => (u.id === 'evolve' ? `evolve:${u.evolveBranch ?? 'a'}` : u.id);
   const result: UpgradeDef[] = [];
-  const used = new Set<UpgradeId>();
+  const used = new Set<string>();
+  const tier = ctx?.weaponTier ?? 0;
 
-  // 约 35% 概率在选项里塞一张进化（若可用）
-  if (evolve && Math.random() < 0.38) {
-    result.push(evolve);
-    used.add('evolve');
+  if (ctx && tier < 2) {
+    const evolveA = buildEvolveUpgrade(ctx.characterId, tier, 'a');
+    const evolveB = tier === 1 ? buildEvolveUpgrade(ctx.characterId, tier, 'b') : null;
+    const roll = Math.random();
+    if (tier === 1 && evolveA && evolveB && roll < 0.24) {
+      result.push(evolveA, evolveB);
+    } else if (evolveA && roll < (tier === 1 ? 0.7 : 0.4)) {
+      result.push(tier === 1 && evolveB && Math.random() < 0.5 ? evolveB : evolveA);
+    }
+    for (const card of result) used.add(keyOf(card));
   }
 
   const shuffled = [...weighted].sort(() => Math.random() - 0.5);
   for (const u of shuffled) {
-    if (used.has(u.id)) continue;
-    used.add(u.id);
+    const key = keyOf(u);
+    if (used.has(key)) continue;
+    used.add(key);
     result.push(u);
     if (result.length >= count) break;
   }
 
-  // 若还不够且有进化未加入，补上
-  if (result.length < count && evolve && !used.has('evolve')) {
-    result.push(evolve);
+  if (result.length < count && ctx && tier < 2) {
+    for (const branch of ['a', 'b'] as const) {
+      if (tier === 0 && branch === 'b') continue;
+      const card = buildEvolveUpgrade(ctx.characterId, tier, branch);
+      if (!card || used.has(keyOf(card))) continue;
+      result.push(card);
+      if (result.length >= count) break;
+    }
   }
 
   return result.slice(0, count);

@@ -9,7 +9,7 @@ export class FloatTexts {
     uiRoot.appendChild(this.root);
   }
 
-  spawn(screenX: number, screenY: number, text: string, kind: 'hurt' | 'crit' | 'dmg' = 'dmg'): void {
+  spawn(screenX: number, screenY: number, text: string, kind: 'hurt' | 'crit' | 'dmg' | 'heavy' = 'dmg'): void {
     const el = this.pool.pop() ?? document.createElement('div');
     el.className = `float-text ${kind}`;
     el.textContent = text;

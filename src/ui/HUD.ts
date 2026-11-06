@@ -20,6 +20,7 @@ export class HUD {
   private eventBannerTimer = 0;
   private rafBound = false;
   private readonly debugEl: HTMLDivElement;
+  private flashEl!: HTMLDivElement;
   private debugVisible = false;
 
   constructor(uiRoot: HTMLElement) {
@@ -74,6 +75,12 @@ export class HUD {
     this.debugEl.style.display = 'none';
     this.root.appendChild(this.debugEl);
 
+    const vignette = document.createElement('div');
+    vignette.className = 'combat-vignette';
+    this.root.appendChild(vignette);
+    this.flashEl = document.createElement('div');
+    this.flashEl.className = 'combat-flash';
+    this.root.appendChild(this.flashEl);
     uiRoot.appendChild(this.root);
     this.timeEl = this.root.querySelector('[data-time]')!;
     this.levelEl = this.root.querySelector('[data-level]')!;
@@ -104,6 +111,14 @@ export class HUD {
 
   setVisible(v: boolean): void {
     this.root.style.display = v ? 'block' : 'none';
+  }
+
+  /** 很短的暖色闪，用来托住重击，不遮画面。 */
+  flash(strength = 0.18): void {
+    this.flashEl.style.opacity = String(Math.max(0, Math.min(0.4, strength)));
+    requestAnimationFrame(() => {
+      this.flashEl.style.opacity = '0';
+    });
   }
 
   /** mode: levelup | pause | protect | hide */

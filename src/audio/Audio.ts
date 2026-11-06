@@ -167,8 +167,9 @@ export class AudioManager {
   }
 
   playShoot(): void {
-    this.tone(780, 0.042, 'square', 0.05, 440);
-    this.noiseBurst(0.02, 0.028, 2100);
+    this.tone(128, 0.07, 'square', 0.08, 52);
+    this.tone(540, 0.045, 'square', 0.04, 240);
+    this.noiseBurst(0.035, 0.045, 780);
   }
 
   playAuraTick(): void {
@@ -179,14 +180,42 @@ export class AudioManager {
     const now = performance.now();
     if (now - this.hitLast < 42) return;
     this.hitLast = now;
-    this.tone(980, 0.032, 'square', 0.042, 520);
-    this.noiseBurst(0.025, 0.035, 1900);
+    this.tone(168, 0.05, 'square', 0.07, 62);
+    this.noiseBurst(0.03, 0.05, 640);
+  }
+
+  playHitHeavy(): void {
+    const now = performance.now();
+    if (now - this.hitLast < 36) return;
+    this.hitLast = now;
+    this.tone(96, 0.09, 'square', 0.1, 42);
+    this.tone(240, 0.05, 'sawtooth', 0.04, 110);
+    this.noiseBurst(0.05, 0.07, 380);
   }
 
   playKill(): void {
-    this.tone(620, 0.04, 'square', 0.055, 340);
-    this.tone(190, 0.07, 'sawtooth', 0.065, 70);
-    this.noiseBurst(0.045, 0.05, 1500);
+    this.tone(140, 0.1, 'sawtooth', 0.09, 48);
+    this.tone(320, 0.05, 'square', 0.04, 150);
+    this.noiseBurst(0.06, 0.07, 520);
+  }
+
+  playCascade(): void {
+    this.tone(78, 0.16, 'square', 0.12, 34);
+    this.tone(196, 0.08, 'sawtooth', 0.06, 80);
+    this.noiseBurst(0.11, 0.09, 340);
+  }
+
+  playBossHit(): void {
+    const now = performance.now();
+    if (now - this.hitLast < 55) return;
+    this.hitLast = now;
+    this.tone(72, 0.1, 'square', 0.12, 36);
+    this.noiseBurst(0.07, 0.08, 260);
+  }
+
+  playStarfall(): void {
+    this.tone(620, 0.08, 'sine', 0.05, 980);
+    setTimeout(() => this.tone(880, 0.1, 'triangle', 0.045), 70);
   }
 
   private pickupLast = 0;

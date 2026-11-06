@@ -10,8 +10,9 @@ export class GameOver {
       level: number;
       kills: number;
       characterName: string;
-      highs: HighScores & { newBestTime: boolean; newBestKills: boolean };
-    },
+        highs: HighScores & { newBestTime: boolean; newBestKills: boolean };
+        milestones?: string[];
+      },
     onRestart: () => void,
     onMenu: () => void,
   ): void {
@@ -34,6 +35,9 @@ export class GameOver {
           <div class="high-row"><span>本机最高存活</span><span>${formatTime(stats.highs.bestTimeSec)}</span></div>
           <div class="high-row"><span>本机最高击杀</span><span>${stats.highs.bestKills}</span></div>
         </div>
+        ${(stats.milestones ?? [])
+          .map((line) => `<div class="milestone-line">新里程碑 · ${line}（下局生效）</div>`)
+          .join('')}
         <button class="btn" type="button" data-restart>再来一局</button>
         <button class="btn secondary" type="button" data-menu>返回大厅</button>
       </div>

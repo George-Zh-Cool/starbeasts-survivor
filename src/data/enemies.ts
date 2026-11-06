@@ -1,4 +1,4 @@
-export type EnemyKind = 'darkcrystal' | 'riftwolf' | 'voidbeetle' | 'elite';
+export type EnemyKind = 'darkcrystal' | 'riftwolf' | 'voidbeetle' | 'embermoth' | 'rockcrab' | 'elite';
 
 export interface EnemyDef {
   kind: EnemyKind;
@@ -11,7 +11,7 @@ export interface EnemyDef {
   xp: number;
   /** Relative spawn weight */
   weight: number;
-  shape: 'crystal' | 'wolf' | 'beetle' | 'elite';
+  shape: 'crystal' | 'wolf' | 'beetle' | 'elite' | 'moth' | 'crab';
 }
 
 export const ENEMY_DEFS: Record<Exclude<EnemyKind, 'elite'>, EnemyDef> = {
@@ -50,6 +50,30 @@ export const ENEMY_DEFS: Record<Exclude<EnemyKind, 'elite'>, EnemyDef> = {
     xp: 2,
     weight: 14,
     shape: 'beetle',
+  },
+  embermoth: {
+    kind: 'embermoth',
+    name: '星萤蛾',
+    color: 0xffc857,
+    radius: 0.4,
+    baseHp: 10,
+    baseSpeed: 6.15,
+    contactDamage: 4,
+    xp: 1,
+    weight: 0,
+    shape: 'moth',
+  },
+  rockcrab: {
+    kind: 'rockcrab',
+    name: '岩壳蟹',
+    color: 0xd4894a,
+    radius: 0.78,
+    baseHp: 78,
+    baseSpeed: 2.05,
+    contactDamage: 13,
+    xp: 3,
+    weight: 0,
+    shape: 'crab',
   },
 };
 

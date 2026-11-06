@@ -262,30 +262,33 @@ export function paintGround(size = 256): HTMLCanvasElement {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('无法创建画布');
   const rand = mulberry32(0x51a7e3);
-  const tile = 16;
+  const tile = 32;
   const tiles = size / tile;
   for (let ty = 0; ty < tiles; ty++) {
     for (let tx = 0; tx < tiles; tx++) {
       const roll = rand();
       const checker = ((tx + ty) & 1) === 0;
-      let rgb: [number, number, number] = checker ? [16, 24, 46] : [34, 48, 82];
-      if (roll < 0.04) rgb = checker ? [20, 36, 58] : [28, 52, 78];
+      const rgb: [number, number, number] = checker ? [18, 28, 54] : [36, 52, 92];
+      const x0 = tx * tile;
+      const y0 = ty * tile;
       ctx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
-      ctx.fillRect(tx * tile, ty * tile, tile, tile);
-      ctx.fillStyle = '#060814';
-      ctx.fillRect(tx * tile, ty * tile, tile, 1);
-      ctx.fillRect(tx * tile, ty * tile, 1, tile);
-      if (roll < 0.18) {
-        const sx = tx * tile + 3 + Math.floor(rand() * (tile - 6));
-        const sy = ty * tile + 3 + Math.floor(rand() * (tile - 6));
-        ctx.fillStyle = rand() > 0.45 ? 'rgba(186,206,255,0.22)' : 'rgba(0,0,0,0.28)';
-        ctx.fillRect(sx, sy, 1, 1);
-      }
-      if (roll > 0.992) {
-        ctx.fillStyle = '#9aeff8';
-        ctx.fillRect(tx * tile + 7, ty * tile + 7, 2, 2);
+      ctx.fillRect(x0, y0, tile, tile);
+      ctx.fillStyle = checker ? '#8ea6dc' : '#b7c6ee';
+      ctx.globalAlpha = 0.45;
+      ctx.fillRect(x0 + 2, y0 + 2, tile - 4, 2);
+      ctx.fillRect(x0 + 2, y0 + 2, 2, tile - 4);
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#070910';
+      ctx.fillRect(x0, y0 + tile - 2, tile, 2);
+      ctx.fillRect(x0 + tile - 2, y0, 2, tile);
+      if (roll > 0.93) {
+        ctx.fillStyle = '#7ee7f2';
+        ctx.fillRect(x0 + 12, y0 + 12, 4, 4);
         ctx.fillStyle = '#f4fdff';
-        ctx.fillRect(tx * tile + 7, ty * tile + 7, 1, 1);
+        ctx.fillRect(x0 + 12, y0 + 12, 2, 2);
+      } else if (roll > 0.88) {
+        ctx.fillStyle = '#e2b15a';
+        ctx.fillRect(x0 + 14, y0 + 18, 6, 2);
       }
     }
   }
@@ -298,19 +301,27 @@ export function paintSky(size = 128): HTMLCanvasElement {
   canvas.height = size;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('无法创建画布');
-  const bands = ['#070814', '#0b1024', '#12183a', '#1a2450', '#24325e', '#2a3058', '#241e40', '#16182e'];
+  const bands = ['#070814', '#0c1430', '#162044', '#24325e', '#2c3a68', '#3a2a58', '#241838', '#12101f'];
   const bandH = size / bands.length;
   bands.forEach((color, i) => {
     ctx.fillStyle = color;
     ctx.fillRect(0, Math.floor(i * bandH), size, Math.ceil(bandH));
   });
+  ctx.fillStyle = '#6d4ea8';
+  ctx.fillRect(18, 28, 46, 8);
+  ctx.fillStyle = '#8d6ad0';
+  ctx.fillRect(28, 36, 36, 6);
+  ctx.fillStyle = '#f4f7ff';
+  ctx.fillRect(92, 18, 10, 10);
+  ctx.fillStyle = '#d5def8';
+  ctx.fillRect(96, 22, 6, 6);
   const rand = mulberry32(0xc0ffee);
-  for (let i = 0; i < 90; i++) {
+  for (let i = 0; i < 48; i++) {
     const x = Math.floor(rand() * size);
-    const y = Math.floor(rand() * size * 0.72);
-    const gold = rand() > 0.86;
-    ctx.fillStyle = gold ? '#ffd98a' : '#e7eeff';
-    const s = gold && rand() > 0.5 ? 2 : 1;
+    const y = Math.floor(rand() * size * 0.62);
+    const gold = rand() > 0.82;
+    ctx.fillStyle = gold ? '#ffd98a' : '#f4f7ff';
+    const s = rand() > 0.75 ? 2 : 1;
     ctx.fillRect(x, y, s, s);
   }
   return canvas;

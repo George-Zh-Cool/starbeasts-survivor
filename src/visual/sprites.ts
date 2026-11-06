@@ -22,7 +22,9 @@ export type CreatureId =
   | 'beetle'
   | 'elite'
   | 'horn'
-  | 'core';
+  | 'core'
+  | 'moth'
+  | 'crab';
 
 export type ShotStyle = 'flame' | 'shard' | 'thorn';
 
@@ -385,6 +387,55 @@ const DEFS: Record<CreatureId, CreatureDef> = {
       '....ss..ss',
     ],
   },
+  moth: {
+    align: 'center',
+    bob: 'hover',
+    motion: { flap: true, flicker: ['y', 'Y'] },
+    palette: {
+      k: '#3a2208',
+      W: '#ffe08a',
+      y: '#ffb703',
+      Y: '#fff3c4',
+      b: '#5c3d16',
+      e: '#1a0c04',
+      m: '#fff6d8',
+    },
+    fill: [
+      '..WW......WW..',
+      '.WyyWW..WWyyW.',
+      'WyyyYYyyYYyyyW',
+      '.WyyWWbbWWyyW.',
+      '..WWWbbbbWWW..',
+      '....bbeeebb...',
+      '.....bmmmb....',
+      '......bbbb....',
+    ],
+  },
+  crab: {
+    align: 'center',
+    bob: 'step',
+    motion: { step: true },
+    palette: {
+      k: '#2a1408',
+      c: '#e7a15a',
+      C: '#fff0d2',
+      b: '#a85a28',
+      d: '#6a3014',
+      e: '#1a0c06',
+      L: '#c46a32',
+    },
+    fill: [
+      '..cc........cc..',
+      '.cCcc......ccCc.',
+      'ccCCcc....ccCCcc',
+      '.cccccccccccccc.',
+      '.ccceee..eeeccc.',
+      '..ccbbbbbbbbcc..',
+      '...ccddddddcc...',
+      '...LL..LL..LL...',
+      '...LL..LL..LL...',
+    ],
+  },
 };
 
 interface Built {
@@ -446,7 +497,7 @@ function getBuilt(id: CreatureId): Built {
     framesL: [canvasTexture(mirrorCanvas(c0)), canvasTexture(mirrorCanvas(c1))],
     aspect: c0.width / c0.height,
     bob: DEFS[id].bob,
-    portrait: scaledDataURL(made.portrait, 3),
+    portrait: scaledDataURL(made.portrait, 4),
   };
   built.set(id, value);
   return value;
@@ -460,23 +511,27 @@ export function portraitURL(id: CreatureId): string {
 function targetHeight(id: CreatureId, radius?: number): number {
   switch (id) {
     case 'fox':
-      return 2.05;
+      return 2.35;
     case 'turtle':
-      return 1.92;
+      return 2.2;
     case 'falcon':
-      return 2.08;
+      return 2.38;
     case 'crystal':
-      return (radius ?? 0.55) * 3.2;
+      return (radius ?? 0.55) * 3.55;
     case 'wolf':
-      return (radius ?? 0.48) * 3.35;
+      return (radius ?? 0.48) * 3.7;
     case 'beetle':
-      return (radius ?? 0.7) * 2.35;
+      return (radius ?? 0.7) * 2.65;
     case 'elite':
-      return (radius ?? 1.1) * 2.15;
+      return (radius ?? 1.1) * 2.45;
     case 'horn':
-      return (radius ?? 1.85) * 1.78;
+      return (radius ?? 1.85) * 2.02;
     case 'core':
-      return (radius ?? 1.7) * 1.95;
+      return (radius ?? 1.7) * 2.15;
+    case 'moth':
+      return (radius ?? 0.4) * 3.6;
+    case 'crab':
+      return (radius ?? 0.78) * 2.55;
     default:
       return 2;
   }

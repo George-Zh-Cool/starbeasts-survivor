@@ -32,7 +32,7 @@ export class HitParticle {
     this.life = this.maxLife;
     this.mesh.visible = true;
     this.mesh.position.set(x, y, z);
-    this.baseScale = (pop ? 0.62 : 0.34) * power * (0.85 + Math.random() * 0.3);
+    this.baseScale = (pop ? 0.78 : 0.48) * power * (0.85 + Math.random() * 0.35);
     this.mesh.scale.setScalar(this.baseScale * (pop ? 0.45 : 1));
     this.material.map = sparkTexture(pop ? 1 : Math.floor(Math.random() * 3));
     this.material.color.setHex(color);

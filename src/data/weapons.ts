@@ -31,6 +31,10 @@ export interface WeaponForm {
   damageMul: number;
   /** 投射物寿命加成 */
   lifeBonus: number;
+  /** 终阶分支。甲是原路线，乙是另一条打法。 */
+  branch: 'a' | 'b';
+  /** 环内敌人移速系数，1 表示不减速 */
+  auraSlow: number;
 }
 
 const BASIC: Omit<WeaponForm, 'tier' | 'id' | 'name' | 'description'> = {
@@ -45,6 +49,8 @@ const BASIC: Omit<WeaponForm, 'tier' | 'id' | 'name' | 'description'> = {
   pierceBonus: 0,
   damageMul: 1,
   lifeBonus: 0,
+  branch: 'a',
+  auraSlow: 1,
 };
 
 /** 焰心狐：火弹 → 爆裂弹 → 连锁火球 */
@@ -153,19 +159,83 @@ export const WIND_FORMS: WeaponForm[] = [
   },
 ];
 
+/** 终阶乙：和甲同一级，打法不同，只能选一条。 */
+const FLAME_BRANCH_B: WeaponForm = {
+  ...BASIC,
+  tier: 2,
+  branch: 'b',
+  id: 'flame_core',
+  name: '熔核爆弹',
+  description: '不弹跳。弹体更大，命中炸开大范围高额溅射。',
+  projScale: 1.95,
+  projColor: 0xff5a1f,
+  splashRadius: 3.5,
+  splashRatio: 0.7,
+  damageMul: 1.42,
+};
+
+const TIDE_BRANCH_B: WeaponForm = {
+  ...BASIC,
+  tier: 2,
+  branch: 'b',
+  id: 'tide_vortex',
+  name: '漩涡囚笼',
+  description: '三层潮环，圈内敌人大幅减速，适合贴身困住一群。',
+  auraRings: 3,
+  auraSlow: 0.58,
+  damageMul: 1.22,
+};
+
+const WIND_BRANCH_B: WeaponForm = {
+  ...BASIC,
+  tier: 2,
+  branch: 'b',
+  id: 'wind_fan',
+  name: '裂风回旋',
+  description: '一次打出五道风刃，清群更快，穿透不如穿透风暴。',
+  projScale: 1.12,
+  projColor: 0xd0b3ff,
+  extraProjectiles: 4,
+  pierceBonus: 1,
+  damageMul: 1.08,
+};
+
 const BY_CHAR: Record<string, WeaponForm[]> = {
   flamefox: FLAME_FORMS,
   tideturtle: TIDE_FORMS,
   windfalcon: WIND_FORMS,
 };
 
+const BRANCH_B: Record<string, WeaponForm> = {
+  flamefox: FLAME_BRANCH_B,
+  tideturtle: TIDE_BRANCH_B,
+  windfalcon: WIND_BRANCH_B,
+};
+
+export type WeaponBranch = 'a' | 'b';
+
 export function getWeaponForms(characterId: string): WeaponForm[] {
   return BY_CHAR[characterId] ?? FLAME_FORMS;
 }
 
-export function getWeaponForm(characterId: string, tier: WeaponTier): WeaponForm {
+export function getWeaponForm(characterId: string, tier: WeaponTier, branch: WeaponBranch = 'a'): WeaponForm {
+  if (tier >= 2 && branch === 'b') {
+    const alt = BRANCH_B[characterId];
+    if (alt) return alt;
+  }
   const forms = getWeaponForms(characterId);
   return forms[Math.min(tier, forms.length - 1)]!;
+}
+
+export function describeWeaponPaths(characterId: string): { step: string; name: string; description: string }[] {
+  const forms = getWeaponForms(characterId);
+  const alt = getWeaponForm(characterId, 2, 'b');
+  return [
+    { step: '初阶', name: forms[0]!.name, description: forms[0]!.description },
+    { step: '一阶', name: forms[1]!.name, description: forms[1]!.description },
+    { step: '终阶 · 甲', name: forms[2]!.name, description: forms[2]!.description },
+    { step: '终阶 · 乙', name: alt.name, description: alt.description },
+  ];
 }
 
 /** 自动进化等级门槛：未选手动进化时，到达该等级自动升一阶 */

@@ -2157,3 +2157,74 @@ button.audio-toggle {
   .lb-tile,
   .lb-beast { transition: none; }
 }
+
+/* 战斗画面：暗角、重击闪、更厚的血条和伤害数字 */
+.combat-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 48%, rgba(4, 8, 22, 0.55) 100%);
+}
+.combat-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  background: #fff3cc;
+  opacity: 0;
+  transition: opacity 80ms linear;
+}
+.hud-top { position: relative; z-index: 5; }
+.bars,
+.boss-bar,
+.event-banner,
+.paused-banner { z-index: 5; }
+.hud-stat {
+  border-width: 2px;
+  border-radius: 6px;
+  background: rgba(8, 10, 22, 0.82);
+}
+.bar-track {
+  height: 18px;
+  border-radius: 4px;
+  border-width: 2px;
+}
+.bar-text { line-height: 18px; font-size: 11px; font-weight: 800; }
+.bar-fill.hp { background: linear-gradient(90deg, #ff2d55, #ffb703); }
+.boss-bar-track { height: 18px; border-radius: 4px; border-width: 2px; }
+.float-text {
+  font-size: 22px;
+  -webkit-text-stroke: 4px #14080e;
+  paint-order: stroke fill;
+}
+.float-text.dmg { color: #f6f1ff; font-size: 20px; }
+.float-text.crit,
+.float-text.heavy { animation: floatPop 0.68s ease-out forwards; }
+.float-text.crit { font-size: 28px; }
+.float-text.heavy {
+  color: #fff6d0;
+  font-size: 32px;
+  letter-spacing: 1px;
+}
+@keyframes floatPop {
+  0% { opacity: 1; transform: translate(-50%, 8px) scale(0.55); }
+  20% { transform: translate(-50%, -4px) scale(1.22); }
+  100% { opacity: 0; transform: translate(-50%, -58px) scale(1); }
+}
+.milestone-line {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f2c14e;
+  color: #1a1020;
+  font-size: 13px;
+  font-weight: 800;
+}
+.lb-path {
+  margin: 6px 0 0;
+  padding-left: 1.1em;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.lb-path li + li { margin-top: 4px; }
