@@ -64,6 +64,8 @@ export interface LocalRun {
   level: number;
   characterId: string;
   characterName: string;
+  modeName?: string;
+  victory?: boolean;
 }
 
 export function loadLocalRuns(): LocalRun[] {
@@ -90,6 +92,8 @@ export function loadLocalRuns(): LocalRun[] {
         level: Number.isFinite(level) && level > 0 ? Math.floor(level) : 1,
         characterId: typeof r.characterId === 'string' ? r.characterId : '',
         characterName: characterName || '星兽',
+        modeName: typeof r.modeName === 'string' ? r.modeName : undefined,
+        victory: r.victory === true,
       });
     }
     return runs.slice(0, MAX_RUNS);
@@ -106,6 +110,8 @@ export function recordLocalRun(run: Omit<LocalRun, 'at'>): void {
     level: Math.max(1, Math.floor(run.level) || 1),
     characterId: run.characterId,
     characterName: run.characterName || '星兽',
+    modeName: run.modeName,
+    victory: run.victory,
   };
   const prev = loadLocalRuns();
   prev.unshift(next);

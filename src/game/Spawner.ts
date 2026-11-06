@@ -1,5 +1,6 @@
 import { ENEMY_DEFS, ELITE_DEF, enemyScale, type EnemyDef } from '../data/enemies';
 import { BALANCE } from '../data/balance';
+import { MODES, type SpawnPressure } from '../data/modes';
 import { rollAffixForSpawn } from '../data/affixes';
 import type { Enemy } from '../entities/Enemy';
 import type { ObjectPool } from './ObjectPool';
@@ -20,6 +21,7 @@ export class Spawner {
   maxBonus = 0;
   /** When boss is alive, slightly reduce background spawn pressure. */
   bossPresent = false;
+  private pressure: SpawnPressure = MODES.standard.pressure;
 
   constructor(scene: THREE.Scene, pool: ObjectPool<Enemy>, active: Enemy[]) {
     this.scene = scene;
@@ -31,9 +33,13 @@ export class Spawner {
     this.obstacles = field;
   }
 
+  setPressure(pressure: SpawnPressure): void {
+    this.pressure = pressure;
+  }
+
   reset(): void {
     this.timer = 0.6;
-    this.eliteTimer = BALANCE.eliteFirstSec;
+    this.eliteTimer = this.pressure.eliteFirstSec;
     this.spawnInterval = BALANCE.spawnIntervalBase;
     this.rateMul = 1;
     this.maxBonus = 0;
@@ -43,9 +49,11 @@ export class Spawner {
   update(dt: number, timeSec: number, player: Player): void {
     const B = BALANCE;
     this.spawnInterval = Math.max(B.spawnIntervalMin, B.spawnIntervalBase - timeSec * B.spawnIntervalDecay);
-    const interval = this.spawnInterval / Math.max(0.25, this.rateMul);
-    let maxEnemies =
-      Math.min(B.maxEnemiesCap, B.maxEnemiesBase + Math.floor(timeSec * B.maxEnemiesPerSec)) + this.maxBonus;
+    const interval = (this.spawnInterval * this.pressure.intervalMul) / Math.max(0.25, this.rateMul);
+    let maxEnemies = Math.min(
+      B.maxEnemiesCap,
+      Math.round((B.maxEnemiesBase + Math.floor(timeSec * B.maxEnemiesPerSec)) * this.pressure.capMul) + this.maxBonus,
+    );
     if (this.bossPresent) maxEnemies = Math.min(maxEnemies, B.maxEnemiesBossCap);
 
     this.timer -= dt;
@@ -60,7 +68,7 @@ export class Spawner {
 
     this.eliteTimer -= dt;
     if (this.eliteTimer <= 0) {
-      this.eliteTimer = B.eliteIntervalMin + Math.random() * B.eliteIntervalRand;
+      this.eliteTimer = (B.eliteIntervalMin + Math.random() * B.eliteIntervalRand) * this.pressure.eliteIntervalMul;
       if (this.active.length < maxEnemies) this.spawnOne(player, timeSec, true);
     }
   }

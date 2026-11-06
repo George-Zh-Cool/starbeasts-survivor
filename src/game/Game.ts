@@ -14,6 +14,8 @@ import { HitParticle } from '../entities/Particle';
 import { Boss } from '../entities/Boss';
 import { HostileProjectile } from '../entities/HostileProjectile';
 import type { CharacterDef } from '../data/characters';
+import { getMode, type RunModeId, type RunSetup } from '../data/modes';
+import { getStarter } from '../data/starters';
 import { applyNewSynergies, pickRandomUpgrades, type UpgradeDef } from '../data/upgrades';
 import { HUD } from '../ui/HUD';
 import { CharacterSelect } from '../ui/CharacterSelect';
@@ -25,6 +27,7 @@ import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { FloatTexts } from '../ui/FloatTexts';
 import { BALANCE, formatDifficultyDebug } from '../data/balance';
 import { applyMilestoneBonuses, milestoneIds, newlyUnlockedMilestones, recordBossKill } from './Milestones';
+import { formatUnlockProgress, newlyUnlocked, nextUnlock, unlockBanner, unlockIdSet } from './Unlocks';
 
 type Phase = 'select' | 'playing' | 'paused' | 'levelup' | 'gameover';
 
@@ -44,6 +47,8 @@ export class Game {
   private phase: Phase = 'select';
   private player: Player | null = null;
   private selectedDef: CharacterDef | null = null;
+  private runMode: RunModeId = 'standard';
+  private starterId = 'plain';
   private charSelect: CharacterSelect | null = null;
 
   private readonly enemies: Enemy[] = [];
@@ -97,6 +102,7 @@ export class Game {
   private cascadeCd = 0;
   private novaGuard = false;
   private milestoneSnap = new Set<string>();
+  private unlockSnap = new Set<string>();
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.canvas = canvas;
@@ -185,23 +191,27 @@ export class Game {
     this.gameOverUi.hide();
     this.clearRun();
     this.charSelect?.dispose();
-    this.charSelect = new CharacterSelect(this.uiRoot, (def) => {
-      this.selectedDef = def;
+    this.charSelect = new CharacterSelect(this.uiRoot, (setup) => {
       this.charSelect?.dispose();
       this.charSelect = null;
-      this.startRun(def);
+      this.startRun(setup);
     });
   }
 
-  private startRun(def: CharacterDef): void {
+  private startRun(setup: RunSetup): void {
     audio.unlock();
     this.clearRun();
+    const def = setup.character;
+    const mode = getMode(setup.modeId);
     this.selectedDef = def;
-    this.player = new Player(def);
+    this.runMode = mode.id;
+    this.starterId = setup.starterId;
+    this.player = new Player(def, setup.starterId);
     this.world.scene.add(this.player.group);
     this.combat.setupAura(this.player);
+    this.spawner.setPressure(mode.pressure);
     this.spawner.reset();
-    this.events.reset();
+    this.events.reset(mode.id);
     this.elapsed = 0;
     this.hitStop = 0;
     this.bossHitCd = 0;
@@ -209,6 +219,7 @@ export class Game {
     this.killStreak = 0;
     this.cascadeCd = 0;
     this.milestoneSnap = milestoneIds();
+    this.unlockSnap = unlockIdSet();
     const bonuses = applyMilestoneBonuses(this.player.stats);
     this.pendingLevels = 0;
     this.briefRewardTimer = 0;
@@ -221,14 +232,21 @@ export class Game {
     this.player.invuln = BALANCE.spawnProtectSec;
     this.hud.setVisible(true);
     this.hud.hideBossBar();
+    this.hud.setBrand(mode.id === 'sprint' ? '短局冲刺' : '标准突围');
     this.hud.setPausedBanner('protect');
+    const lead: string[] = [];
+    if (mode.id === 'sprint') lead.push('短局冲刺 · 撑到 1:30 过关');
+    if (setup.starterId !== 'plain') lead.push(`起始武装 ${getStarter(setup.starterId).name}`);
     if (bonuses.length > 0) {
       const names = bonuses
         .slice(0, 3)
         .map((m) => m.name)
         .join('、');
       const extra = bonuses.length > 3 ? ` 等 ${bonuses.length} 项` : '';
-      this.hud.showEventBanner(`本机加成已计入 · ${names}${extra}`, 'reward', 2.8);
+      lead.push(`加成 ${names}${extra}`);
+    }
+    if (lead.length > 0) {
+      this.hud.showEventBanner(lead.join(' · '), 'reward', 2.8);
     }
     this.floats.clear();
     this.joystick.setVisible(true);
@@ -501,7 +519,12 @@ export class Game {
     this.refreshHud(player);
 
     if (!player.alive) {
-      this.openGameOver();
+      this.openGameOver(false);
+      return;
+    }
+
+    if (this.runMode === 'sprint' && this.elapsed >= getMode('sprint').goalSec) {
+      this.openGameOver(true);
       return;
     }
 
@@ -633,6 +656,7 @@ export class Game {
       player.weaponForm.name,
       player.stats.shield,
       player.stats.shieldMax,
+      getMode(this.runMode).goalSec,
     );
     const b = this.events.activeBoss;
     if (b?.active) {
@@ -741,7 +765,8 @@ export class Game {
     }
   }
 
-  private openGameOver(): void {
+  private openGameOver(victory: boolean): void {
+    if (this.phase === 'gameover') return;
     this.phase = 'gameover';
     this.joystick.setVisible(false);
     this.hud.setPausedBanner(false);
@@ -749,6 +774,7 @@ export class Game {
     audio.playGameOver();
     const p = this.player!;
     const name = this.selectedDef?.name ?? '星兽';
+    const mode = getMode(this.runMode);
     const highs = submitRun(this.elapsed, p.kills);
     recordLocalRun({
       timeSec: this.elapsed,
@@ -756,8 +782,12 @@ export class Game {
       level: p.level,
       characterId: this.selectedDef?.id ?? '',
       characterName: name,
+      modeName: mode.name,
+      victory,
     });
     const fresh = newlyUnlockedMilestones(this.milestoneSnap);
+    const unlockedNow = newlyUnlocked(this.unlockSnap);
+    const upcoming = nextUnlock();
     this.gameOverUi.show(
       this.uiRoot,
       {
@@ -767,9 +797,25 @@ export class Game {
         characterName: name,
         highs,
         milestones: fresh.map((m) => `${m.name}：${m.reward}`),
+        victory,
+        modeName: mode.name,
+        unlocks: unlockedNow.map(unlockBanner),
+        next: upcoming
+          ? {
+              name: upcoming.name,
+              line: `${upcoming.detail} · ${formatUnlockProgress(upcoming)}`,
+              ratio: upcoming.ratio,
+              where: upcoming.where,
+            }
+          : null,
       },
       () => {
-        if (this.selectedDef) this.startRun(this.selectedDef);
+        if (!this.selectedDef) return;
+        this.startRun({
+          character: this.selectedDef,
+          modeId: this.runMode,
+          starterId: this.starterId,
+        });
       },
       () => this.showCharacterSelect(),
     );

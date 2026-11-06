@@ -1,5 +1,7 @@
 import { CHARACTERS, type CharacterDef } from '../data/characters';
 import { audio } from '../audio/Audio';
+import { getMode, type RunModeId, type RunSetup } from '../data/modes';
+import { STARTERS, type StarterId } from '../data/starters';
 import {
   formatTime,
   loadHighScores,
@@ -12,6 +14,21 @@ import {
 import { portraitURL, warmupSprites, type CreatureId } from '../visual/sprites';
 import { describeWeaponPaths } from '../data/weapons';
 import { listMilestones, type Milestone } from '../game/Milestones';
+import {
+  beastUnlock,
+  formatUnlockProgress,
+  isBeastUnlocked,
+  isModeUnlocked,
+  isStarterUnlocked,
+  listUnlocks,
+  loadModeId,
+  loadStarterId,
+  modeUnlock,
+  nextUnlock,
+  saveModeId,
+  saveStarterId,
+  starterUnlock,
+} from '../game/Unlocks';
 
 type SortKey = 'time' | 'kills';
 type PanelId = 'dex' | 'lab' | 'ach' | 'rank' | 'squad' | 'settings' | 'lang' | 'profile';
@@ -26,8 +43,9 @@ interface Achievement {
 interface DexEntry {
   id: CreatureId;
   name: string;
-  kind: '可出战' | '暗潮' | '大体型';
+  kind: '可出战' | '未解锁' | '暗潮' | '大体型';
   blurb: string;
+  locked?: boolean;
 }
 
 const SOON: Record<string, { title: string; body: string }> = {
@@ -70,12 +88,21 @@ const ICO = {
 };
 
 function dexEntries(): DexEntry[] {
-  const playable: DexEntry[] = CHARACTERS.map((c) => ({
-    id: c.shape,
-    name: c.name,
-    kind: '可出战',
-    blurb: `${c.title}。${c.description}`,
-  }));
+  const playable: DexEntry[] = CHARACTERS.map((c) => {
+    const open = isBeastUnlocked(c.id);
+    const gate = beastUnlock(c.id);
+    return {
+      id: c.shape,
+      name: c.name,
+      kind: open ? '可出战' : '未解锁',
+      locked: !open,
+      blurb: open
+        ? `${c.title}。${c.description}`
+        : gate
+          ? `${gate.detail}。解锁后去${gate.where}。`
+          : c.description,
+    };
+  });
   return [
     ...playable,
     { id: 'crystal', name: '暗晶兽', kind: '暗潮', blurb: '最常见的晶簇，走得慢，一波里数量最多。' },
@@ -138,12 +165,14 @@ function formatWhen(at: number): string {
 
 export class CharacterSelect {
   private readonly overlay: HTMLDivElement;
-  private readonly onPick: (def: CharacterDef) => void;
+  private readonly onPick: (setup: RunSetup) => void;
   private readonly highs: HighScores;
   private readonly runs: LocalRun[];
   private readonly achievements: Achievement[];
   private readonly milestones: Milestone[];
   private preferredId: string;
+  private modeId: RunModeId;
+  private starterId: StarterId;
   private boardSort: SortKey = 'time';
   private pick: HTMLDivElement | null = null;
   private sheet: HTMLDivElement | null = null;
@@ -156,7 +185,7 @@ export class CharacterSelect {
     if (this.pick) this.closePick();
   };
 
-  constructor(uiRoot: HTMLElement, onPick: (def: CharacterDef) => void) {
+  constructor(uiRoot: HTMLElement, onPick: (setup: RunSetup) => void) {
     warmupSprites();
     this.onPick = onPick;
     this.highs = loadHighScores();
@@ -164,7 +193,9 @@ export class CharacterSelect {
     this.achievements = buildAchievements(this.highs, this.runs);
     this.milestones = listMilestones();
     const stored = loadPreferredId();
-    this.preferredId = characterById(stored) ? stored : '';
+    this.preferredId = characterById(stored) && isBeastUnlocked(stored) ? stored : '';
+    this.modeId = loadModeId();
+    this.starterId = loadStarterId();
 
     this.overlay = document.createElement('div');
     this.overlay.className = 'overlay lb-overlay';
@@ -191,12 +222,17 @@ export class CharacterSelect {
     const next = this.achievements.find((a) => !a.unlocked);
     const nextMile = this.milestones.find((m) => !m.unlocked);
     const mileOn = this.milestones.filter((m) => m.unlocked).length;
-    const goalTitle = nextMile ? nextMile.name : next ? next.name : '目标已满';
-    const goalBody = nextMile
-      ? `${nextMile.detail}。达成后下局：${nextMile.reward}`
-      : next
-        ? next.detail
-        : '这台设备上的目标和加成都点亮了。';
+    const content = listUnlocks();
+    const contentOn = content.filter((item) => item.unlocked).length;
+    const upcoming = nextUnlock();
+    const goalTitle = upcoming ? upcoming.name : nextMile ? nextMile.name : next ? next.name : '目标已满';
+    const goalBody = upcoming
+      ? `${upcoming.detail} · ${formatUnlockProgress(upcoming)}。解锁后去${upcoming.where}`
+      : nextMile
+        ? `${nextMile.detail}。达成后下局：${nextMile.reward}`
+        : next
+          ? next.detail
+          : '这台设备上的目标和加成都点亮了。';
     const achBadge = unlocked > 0 ? `<i class="lb-count">${unlocked}</i>` : '';
     const runBadge = this.runs.length > 0 ? `<i class="lb-count quiet">${this.runs.length}</i>` : '';
     return `
@@ -223,7 +259,7 @@ export class CharacterSelect {
               <div class="lb-brand-en">STARBEASTS</div>
               <h1 class="lb-logo"><span>星兽</span><span class="gold">突围</span></h1>
             </div>
-            <span class="lb-ver">试炼版 v0.2.0</span>
+            <span class="lb-ver">试炼版 v0.3.0</span>
           </div>
           <div class="lb-bento">
             <button type="button" class="lb-start" data-start>
@@ -234,14 +270,14 @@ export class CharacterSelect {
               <span class="lb-start-sub" data-start-sub>生存突围 · 选一只星兽</span>
             </button>
             <button type="button" class="lb-mode survive" data-mode="survival">
-              <span class="lb-mode-top"><span class="lb-mode-kicker">单机可玩</span><span class="lb-mode-badge">当前</span></span>
-              <strong>生存突围</strong>
+              <span class="lb-mode-top"><span class="lb-mode-kicker">默认</span><span class="lb-mode-badge">当前</span></span>
+              <strong>标准突围</strong>
               <em>石砖暗潮，撑得越久越好</em>
             </button>
-            <button type="button" class="lb-mode endless" data-mode="endless">
-              <span class="lb-mode-top"><span class="lb-mode-kicker">未开放</span><span class="lb-mode-badge">即将开放</span></span>
-              <strong>无尽暗潮</strong>
-              <em>同一片石砖，但不会收场</em>
+            <button type="button" class="lb-mode sprint" data-mode="sprint">
+              <span class="lb-mode-top"><span class="lb-mode-kicker">可选</span><span class="lb-mode-badge">可玩</span></span>
+              <strong>短局冲刺</strong>
+              <em>90 秒高压，撑到点算过关</em>
             </button>
             <button type="button" class="lb-mode trial" data-mode="trial">
               <span class="lb-mode-top"><span class="lb-mode-kicker">未开放</span><span class="lb-mode-badge">即将开放</span></span>
@@ -255,12 +291,13 @@ export class CharacterSelect {
             </button>
             <div class="lb-memo">
               <span class="lb-memo-kicker">暗潮备忘</span>
-              <p>40 秒星屑雨，55 秒萤潮，60 秒裂空巨角。开局加成只写在这台浏览器，已点亮 ${mileOn}/${this.milestones.length}。</p>
+              <p>标准模式约 60 秒裂空巨角。可解锁内容 ${contentOn}/${content.length}，开局加成 ${mileOn}/${this.milestones.length}。无尽暗潮还没开放。</p>
             </div>
-            <button type="button" class="lb-goal" data-panel="ach">
-              <span class="lb-memo-kicker">下一目标 · ${unlocked}/${this.achievements.length}</span>
+            <button type="button" class="lb-goal" ${upcoming ? 'data-next-unlock' : 'data-panel="ach"'}>
+              <span class="lb-memo-kicker">${upcoming ? `下一解锁 · ${contentOn}/${content.length}` : `下一目标 · ${unlocked}/${this.achievements.length}`}</span>
               <strong>${esc(goalTitle)}</strong>
               <em>${esc(goalBody)}</em>
+              ${upcoming ? `<span class="next-meter" aria-hidden="true"><span style="width:${Math.round(upcoming.ratio * 100)}%"></span></span>` : ''}
             </button>
             <nav class="lb-nav" aria-label="大厅入口">
               <button type="button" class="lb-tile" data-panel="dex"><span class="lb-ico dex">${ICO.book}</span><b>图鉴</b></button>
@@ -309,8 +346,25 @@ export class CharacterSelect {
       const mode = target.closest<HTMLElement>('[data-mode]');
       if (mode?.dataset.mode) {
         audio.unlock();
-        if (mode.dataset.mode === 'survival') this.openPick();
-        else this.openSoon(mode.dataset.mode);
+        if (mode.dataset.mode === 'survival') {
+          this.setMode('standard');
+          this.openPick();
+          return;
+        }
+        if (mode.dataset.mode === 'sprint') {
+          if (!isModeUnlocked('sprint')) {
+            this.openLockedMode();
+            return;
+          }
+          this.setMode('sprint');
+          this.openPick();
+          return;
+        }
+        this.openSoon(mode.dataset.mode);
+        return;
+      }
+      if (target.closest('[data-next-unlock]')) {
+        this.openNextUnlock();
         return;
       }
       const panel = target.closest<HTMLElement>('[data-panel]');
@@ -344,8 +398,68 @@ export class CharacterSelect {
     });
     const kicker = this.overlay.querySelector('[data-start-kicker]');
     const sub = this.overlay.querySelector('[data-start-sub]');
+    const mode = getMode(this.modeId);
     if (kicker) kicker.textContent = this.preferredId ? `首选 · ${beast.name}` : '出战';
-    if (sub) sub.textContent = '生存突围 · 选一只星兽';
+    if (sub) sub.textContent = `${mode.name} · 选一只星兽`;
+    this.paintModes();
+  }
+
+  private setMode(id: RunModeId): void {
+    this.modeId = id === 'sprint' && !isModeUnlocked('sprint') ? 'standard' : id;
+    saveModeId(this.modeId);
+    this.refreshPreferred();
+  }
+
+  private paintModes(): void {
+    const sprintOpen = isModeUnlocked('sprint');
+    const sprintInfo = modeUnlock('sprint');
+    const survival = this.overlay.querySelector<HTMLElement>('[data-mode="survival"]');
+    const sprint = this.overlay.querySelector<HTMLElement>('[data-mode="sprint"]');
+    const mark = (btn: HTMLElement | null, current: boolean, locked: boolean, kicker: string, badge: string, blurb: string) => {
+      if (!btn) return;
+      btn.classList.toggle('is-current', current);
+      btn.classList.toggle('is-locked', locked);
+      const k = btn.querySelector('.lb-mode-kicker');
+      const b = btn.querySelector('.lb-mode-badge');
+      const em = btn.querySelector('em');
+      if (k) k.textContent = kicker;
+      if (b) b.textContent = badge;
+      if (em) em.textContent = blurb;
+    };
+    mark(survival, this.modeId === 'standard', false, '默认', this.modeId === 'standard' ? '当前' : '可玩', '石砖暗潮，撑得越久越好');
+    mark(
+      sprint,
+      this.modeId === 'sprint',
+      !sprintOpen,
+      sprintOpen ? '可选' : '未解锁',
+      this.modeId === 'sprint' ? '当前' : sprintOpen ? '可玩' : '锁定',
+      sprintOpen
+        ? '90 秒高压，撑到点算过关'
+        : sprintInfo
+          ? `${sprintInfo.detail} · ${formatUnlockProgress(sprintInfo)}`
+          : '打完 1 局后解锁',
+    );
+  }
+
+  private openLockedMode(): void {
+    const info = modeUnlock('sprint');
+    const line = info ? `${info.detail}。现在 ${formatUnlockProgress(info)}。` : '打完 1 局后解锁。';
+    this.openSheet(
+      '短局冲刺',
+      `<p class="lb-soon-banner">未解锁</p><p class="lb-sheet-lead">${esc(line)}解锁后点这张卡片，再开始游戏。刷怪更密，撑过 1:30 算过关。</p>`,
+    );
+  }
+
+  private openNextUnlock(): void {
+    const upcoming = nextUnlock();
+    if (!upcoming) {
+      this.openPanel('ach');
+      return;
+    }
+    this.openSheet(
+      upcoming.name,
+      `<p class="lb-soon-banner">还差一档</p><p class="lb-sheet-lead">${esc(upcoming.detail)}。进度 ${esc(formatUnlockProgress(upcoming))}。解锁后去${esc(upcoming.where)}。</p>`,
+    );
   }
 
   private syncMuteChip(): void {
@@ -424,6 +538,7 @@ export class CharacterSelect {
         const when = formatWhen(run.at);
         const primary = this.boardSort === 'kills' ? `${run.kills}` : formatTime(run.timeSec);
         const secondary = this.boardSort === 'kills' ? `存活 ${formatTime(run.timeSec)}` : `击杀 ${run.kills}`;
+        const modeLabel = run.modeName || '标准突围';
         const rankClass = index < 3 ? ` r${index + 1}` : '';
         return `
           <li class="lb-row">
@@ -431,7 +546,7 @@ export class CharacterSelect {
             ${portrait}
             <span class="lb-row-main">
               <b>${esc(run.characterName)}</b>
-              <small>生存突围 · 等级 ${run.level}${when ? ` · ${esc(when)}` : ''}</small>
+              <small>${esc(modeLabel)}${run.victory ? ' · 达成' : ''} · 等级 ${run.level}${when ? ` · ${esc(when)}` : ''}</small>
             </span>
             <span class="lb-row-score">
               <strong>${primary}</strong>
@@ -448,50 +563,92 @@ export class CharacterSelect {
     this.closeSheet();
     const modal = document.createElement('div');
     modal.className = 'overlay lb-modal';
-    const cards = CHARACTERS.map((c) => {
-      const preferred = c.id === this.preferredId;
-      return `
-        <button type="button" class="lb-beast${preferred ? ' is-preferred' : ''}" data-id="${esc(c.id)}">
-          ${preferred ? '<span class="lb-pref">首选</span>' : ''}
-          <span class="lb-beast-art" style="--c1:${hex(c.color)};--c2:${hex(c.accent)}">
-            <img alt="" src="${portraitURL(c.shape)}" />
-          </span>
-          <span class="lb-beast-name">${esc(c.name)}</span>
-          <span class="lb-beast-title">${esc(c.title)}</span>
-          <span class="lb-beast-desc">${esc(c.description)}</span>
-          <span class="lb-tags">${c.tags.map((tag) => `<i>${esc(tag)}</i>`).join('')}</span>
-          <span class="lb-go">点击出战</span>
-        </button>
-      `;
-    }).join('');
+    const mode = getMode(this.modeId);
     modal.innerHTML = `
       <div class="lb-sheet lb-pick" role="dialog" aria-modal="true" aria-labelledby="lb-pick-title">
         <div class="lb-sheet-head">
           <div>
-            <div class="lb-sheet-kicker">生存突围</div>
+            <div class="lb-sheet-kicker">${esc(mode.name)}</div>
             <h2 id="lb-pick-title">选择出战星兽</h2>
           </div>
           <button type="button" data-close>返回大厅</button>
         </div>
-        <p class="lb-sheet-lead">点卡片上的「点击出战」就会开始这一局。首选只是高亮，不会自动开局。</p>
-        <div class="lb-beast-grid">${cards}</div>
+        <p class="lb-sheet-lead">先选起始武装，再点已解锁的星兽开局。灰色卡片还没拿到，条件和进度写在卡片上。</p>
+        <div class="lb-arms" data-arms>${this.armsHtml()}</div>
+        <div class="lb-beast-grid">${this.beastCardsHtml()}</div>
       </div>
     `;
     modal.addEventListener('click', (event) => {
       if (event.target === modal) this.closePick();
     });
     modal.querySelector('[data-close]')?.addEventListener('click', () => this.closePick());
+    modal.querySelector('[data-arms]')?.addEventListener('click', (event) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>('[data-starter]');
+      const id = button?.dataset.starter;
+      if (!id || !isStarterUnlocked(id)) return;
+      if (id !== 'plain' && id !== 'riftbow' && id !== 'tidemallet') return;
+      this.starterId = id;
+      saveStarterId(id);
+      const slot = modal.querySelector('[data-arms]');
+      if (slot) slot.innerHTML = this.armsHtml();
+    });
     modal.querySelector('.lb-beast-grid')?.addEventListener('click', (event) => {
       const button = (event.target as HTMLElement).closest<HTMLElement>('[data-id]');
       const id = button?.dataset.id;
       if (!id) return;
       const def = characterById(id);
       if (!def) return;
+      if (!isBeastUnlocked(id)) {
+        button?.classList.remove('is-shake');
+        void button?.offsetWidth;
+        button?.classList.add('is-shake');
+        return;
+      }
       audio.unlock();
-      this.onPick(def);
+      const starterId = isStarterUnlocked(this.starterId) ? this.starterId : 'plain';
+      this.onPick({ character: def, modeId: this.modeId, starterId });
     });
     this.overlay.parentElement?.appendChild(modal);
     this.pick = modal;
+  }
+
+  private beastCardsHtml(): string {
+    return CHARACTERS.map((c) => {
+      const open = isBeastUnlocked(c.id);
+      const gate = beastUnlock(c.id);
+      const preferred = open && c.id === this.preferredId;
+      const lockLine = gate ? `${gate.detail} · ${formatUnlockProgress(gate)}` : '尚未解锁';
+      return `
+        <button type="button" class="lb-beast${preferred ? ' is-preferred' : ''}${open ? '' : ' is-locked'}" data-id="${esc(c.id)}" ${open ? '' : 'aria-disabled="true"'}>
+          ${preferred ? '<span class="lb-pref">首选</span>' : ''}
+          ${open ? '' : '<span class="lb-pref lb-lock-flag">未解锁</span>'}
+          <span class="lb-beast-art" style="--c1:${hex(c.color)};--c2:${hex(c.accent)}">
+            <img alt="" src="${portraitURL(c.shape)}" />
+            ${open ? '' : '<span class="lb-q">?</span>'}
+          </span>
+          <span class="lb-beast-name">${esc(c.name)}</span>
+          <span class="lb-beast-title">${open ? esc(c.title) : '未解锁'}</span>
+          <span class="lb-beast-desc">${open ? esc(c.description) : esc(lockLine)}</span>
+          <span class="lb-tags">${(open ? c.tags : ['锁定']).map((tag) => `<i>${esc(tag)}</i>`).join('')}</span>
+          <span class="lb-go">${open ? '点击出战' : '还不能出战'}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  private armsHtml(): string {
+    return STARTERS.map((starter) => {
+      const open = isStarterUnlocked(starter.id);
+      const on = starter.id === this.starterId;
+      const gate = starterUnlock(starter.id);
+      const note = open ? starter.blurb : gate ? `${gate.detail} · ${formatUnlockProgress(gate)}` : '尚未解锁';
+      return `
+        <button type="button" class="lb-arm${on && open ? ' is-on' : ''}${open ? '' : ' is-locked'}" data-starter="${esc(starter.id)}" ${open ? '' : 'disabled'}>
+          <b>${esc(starter.name)}</b>
+          <small>${esc(note)}</small>
+        </button>
+      `;
+    }).join('');
   }
 
   private closePick(): void {
@@ -594,7 +751,7 @@ export class CharacterSelect {
     const cards = dexEntries()
       .map(
         (entry) => `
-        <article class="lb-dex-card">
+        <article class="lb-dex-card${entry.locked ? ' is-locked' : ''}">
           <img alt="" src="${portraitURL(entry.id)}" />
           <div>
             <span class="lb-kind">${entry.kind}</span>
@@ -630,14 +787,18 @@ export class CharacterSelect {
 
   private labHtml(): string {
     const paths = CHARACTERS.map((c) => {
+      const open = isBeastUnlocked(c.id);
+      const gate = beastUnlock(c.id);
       const steps = describeWeaponPaths(c.id)
         .map((step) => `<li><b>${esc(step.step)} · ${esc(step.name)}</b> ${esc(step.description)}</li>`)
         .join('');
+      const lock = open ? '' : `<p>${esc(gate ? `${gate.detail}后可出战` : '尚未解锁')}</p>`;
       return `
-        <article class="lb-lab-card">
+        <article class="lb-lab-card${open ? '' : ' is-locked'}">
           <img alt="" src="${portraitURL(c.shape)}" />
           <div>
             <b>${esc(c.name)}</b>
+            ${lock}
             <ul class="lb-path">${steps}</ul>
           </div>
         </article>
@@ -689,13 +850,18 @@ export class CharacterSelect {
 
   private squadHtml(): string {
     const cards = CHARACTERS.map((c) => {
-      const on = c.id === this.preferredId;
+      const open = isBeastUnlocked(c.id);
+      const on = open && c.id === this.preferredId;
+      const gate = beastUnlock(c.id);
+      const action = open
+        ? `<button type="button" data-prefer="${esc(c.id)}" class="${on ? 'is-on' : ''}">${on ? '当前首选' : '设为首选'}</button>`
+        : `<button type="button" disabled>${esc(gate ? gate.detail : '未解锁')}</button>`;
       return `
-        <article class="lb-squad-card${on ? ' is-on' : ''}">
+        <article class="lb-squad-card${on ? ' is-on' : ''}${open ? '' : ' is-locked'}">
           <img alt="" src="${portraitURL(c.shape)}" />
           <b>${esc(c.name)}</b>
-          <small>${esc(c.title)}</small>
-          <button type="button" data-prefer="${esc(c.id)}" class="${on ? 'is-on' : ''}">${on ? '当前首选' : '设为首选'}</button>
+          <small>${open ? esc(c.title) : '未解锁'}</small>
+          ${action}
         </article>
       `;
     }).join('');
@@ -716,7 +882,7 @@ export class CharacterSelect {
       }
       const prefer = target.closest<HTMLElement>('[data-prefer]');
       const id = prefer?.dataset.prefer;
-      if (!id || !characterById(id)) return;
+      if (!id || !characterById(id) || !isBeastUnlocked(id)) return;
       savePreferredId(id);
       this.preferredId = id;
       this.refreshPreferred();

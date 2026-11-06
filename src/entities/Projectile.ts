@@ -16,6 +16,8 @@ export class Projectile {
   chainLeft = 0;
   knockback = 0;
   crit = false;
+  slowDuration = 0;
+  slowFactor = 1;
   readonly velocity = new THREE.Vector3();
   readonly hitEnemies = new Set<number>();
   private baseScale = 1;
@@ -66,6 +68,8 @@ export class Projectile {
       knockback?: number;
       crit?: boolean;
       style?: ShotStyle;
+      slowDuration?: number;
+      slowFactor?: number;
     },
   ): void {
     this.active = true;
@@ -81,6 +85,8 @@ export class Projectile {
     this.chainLeft = opts?.chainLeft ?? 0;
     this.knockback = opts?.knockback ?? 0;
     this.crit = opts?.crit ?? false;
+    this.slowDuration = opts?.slowDuration ?? 0;
+    this.slowFactor = opts?.slowFactor ?? 1;
     this.hitEnemies.clear();
     this.baseScale = opts?.scale ?? 1;
     this.mesh.scale.setScalar(this.baseScale);

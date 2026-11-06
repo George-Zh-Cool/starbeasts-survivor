@@ -1319,7 +1319,7 @@ button.audio-toggle {
   display: grid;
   grid-template-columns: 1.15fr 1fr 1fr;
   grid-template-areas:
-    'start survive endless'
+    'start survive sprint'
     'start trial party'
     'memo goal goal'
     'nav nav nav';
@@ -1518,7 +1518,7 @@ button.audio-toggle {
 }
 
 .lb-mode.survive { grid-area: survive; background: linear-gradient(160deg, #7464ff, #3d46d6); }
-.lb-mode.endless { grid-area: endless; background: linear-gradient(160deg, #8d55ff, #5a2d9c); }
+.lb-mode.sprint { grid-area: sprint; background: linear-gradient(160deg, #ff5a45, #b4233c); }
 .lb-mode.trial { grid-area: trial; background: linear-gradient(160deg, #ff6eae, #c94ad8); }
 .lb-mode.party { grid-area: party; background: linear-gradient(160deg, #ff9468, #ff5d8a); }
 
@@ -2115,7 +2115,7 @@ button.audio-toggle {
     grid-template-columns: 1fr 1fr;
     grid-template-areas:
       'start start'
-      'survive endless'
+      'survive sprint'
       'trial party'
       'memo goal'
       'nav nav';
@@ -2133,7 +2133,7 @@ button.audio-toggle {
   .lb-bento {
     grid-template-areas:
       'start start'
-      'survive endless'
+      'survive sprint'
       'trial party'
       'memo memo'
       'goal goal'
@@ -2228,3 +2228,157 @@ button.audio-toggle {
   line-height: 1.45;
 }
 .lb-path li + li { margin-top: 4px; }
+
+.lb-mode.is-locked {
+  filter: grayscale(0.92) brightness(0.66);
+}
+
+.lb-mode.is-current {
+  outline: 3px solid #ffd56a;
+  outline-offset: 2px;
+}
+
+.lb-arms {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.lb-arm {
+  text-align: left;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f6f1ff;
+  padding: 8px 10px;
+  min-height: 68px;
+}
+
+.lb-arm b { display: block; font-size: 14px; }
+.lb-arm small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: rgba(246, 241, 255, 0.75);
+}
+
+.lb-arm.is-on {
+  border-color: #ffd56a;
+  box-shadow: 0 0 0 1px rgba(255, 213, 106, 0.45);
+}
+
+.lb-arm.is-locked,
+.lb-arm:disabled {
+  filter: grayscale(0.85);
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+
+.lb-beast.is-locked { cursor: not-allowed; }
+
+.lb-beast.is-locked .lb-beast-art img,
+.lb-dex-card.is-locked img,
+.lb-lab-card.is-locked img,
+.lb-squad-card.is-locked img {
+  filter: grayscale(1) brightness(0.28) contrast(1.25);
+}
+
+.lb-beast-art { position: relative; }
+
+.lb-q {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 3px 0 #120818;
+  pointer-events: none;
+}
+
+.lb-lock-flag {
+  background: #3a3148;
+  color: #efe6c8;
+}
+
+.lb-beast.is-shake {
+  animation: lb-shake 0.28s linear;
+}
+
+@keyframes lb-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-5px); }
+  75% { transform: translateX(5px); }
+}
+
+.panel.gameover-panel {
+  width: min(520px, 94vw);
+}
+
+.unlock-banner {
+  text-align: left;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  background: #2a1a08;
+  border: 3px solid #ffd56a;
+  color: #fff8e8;
+}
+
+.unlock-banner b {
+  display: block;
+  color: #ffd56a;
+  font-size: 16px;
+  margin-bottom: 4px;
+}
+
+.unlock-banner span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.next-unlock {
+  text-align: left;
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  background: #100e1c;
+  border: 3px solid #2e2944;
+}
+
+.next-unlock b { display: block; margin: 2px 0 4px; font-size: 16px; }
+
+.next-unlock p,
+.next-unlock small {
+  display: block;
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(246, 241, 255, 0.82);
+}
+
+.next-unlock.is-done { text-align: center; }
+
+.next-meter {
+  display: block;
+  height: 10px;
+  margin: 8px 0;
+  background: #241c33;
+  border: 2px solid #efe6c8;
+  width: 100%;
+}
+
+.next-meter > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #ffd56a;
+}
+
+.lb-goal .next-meter { margin-top: 8px; }
+
+@media (max-width: 640px) {
+  .lb-arms { grid-template-columns: 1fr; }
+}
