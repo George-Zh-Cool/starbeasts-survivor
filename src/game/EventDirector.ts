@@ -9,7 +9,7 @@ import type { ObstacleField } from './Obstacles';
 import { rollAffixForSpawn } from '../data/affixes';
 import type * as THREE from 'three';
 
-export type EventKind = 'boss' | 'elite_tide';
+export type EventKind = 'boss' | 'elite_tide' | 'starfall' | 'pack' | 'swarm';
 
 export interface ScheduledEvent {
   atSec: number;
@@ -23,6 +23,8 @@ export interface EventHooks {
   onEliteTide: () => void;
   onBossSpawned: (boss: Boss) => void;
   onBossDefeated: (bossName: string, xp: number) => void;
+  onStarfall: (drops: { x: number; z: number; value: number }[]) => void;
+  onSkirmish: (text: string, kind: 'tide' | 'reward') => void;
 }
 
 /**
@@ -113,27 +115,37 @@ export class EventDirector {
 
   private buildSchedule(): ScheduledEvent[] {
     const list: ScheduledEvent[] = [
+      { atSec: 40, kind: 'starfall', label: '星屑雨' },
+      { atSec: 55, kind: 'swarm', label: '萤潮' },
       { atSec: 60, kind: 'boss', bossIndex: 0, label: BOSS_HORN.name },
+      { atSec: 75, kind: 'pack', label: '督卫小队' },
       { atSec: 90, kind: 'elite_tide', label: '精英潮' },
+      { atSec: 108, kind: 'starfall', label: '星屑雨' },
       { atSec: 120, kind: 'boss', bossIndex: 1, label: BOSS_CORE.name },
+      { atSec: 138, kind: 'pack', label: '督卫小队' },
       { atSec: 150, kind: 'elite_tide', label: '精英潮' },
+      { atSec: 168, kind: 'swarm', label: '萤潮' },
     ];
-    let t = 180;
+    let t = 188;
+    const cycle: EventKind[] = ['boss', 'elite_tide', 'pack', 'swarm', 'starfall'];
     let bossFlip = 0;
-    for (let i = 0; i < 12; i++) {
-      if (i % 2 === 0) {
-        const def = BOSS_ROSTER[bossFlip % BOSS_ROSTER.length];
+    for (let i = 0; i < 18; i++) {
+      const kind = cycle[i % cycle.length]!;
+      if (kind === 'boss') {
+        const def = BOSS_ROSTER[bossFlip % BOSS_ROSTER.length]!;
         list.push({
           atSec: t,
-          kind: 'boss',
+          kind,
           bossIndex: bossFlip % BOSS_ROSTER.length,
           label: def.name,
         });
         bossFlip += 1;
       } else {
-        list.push({ atSec: t, kind: 'elite_tide', label: '精英潮' });
+        const label =
+          kind === 'elite_tide' ? '精英潮' : kind === 'pack' ? '督卫小队' : kind === 'swarm' ? '萤潮' : '星屑雨';
+        list.push({ atSec: t, kind, label });
       }
-      t += 30;
+      t += 26;
     }
     return list;
   }
@@ -190,10 +202,54 @@ export class EventDirector {
       for (let i = 0; i < BALANCE.eliteTideInitialBurst; i++) this.spawnTideEnemy(player, timeSec, true);
       return;
     }
+    if (ev.kind === 'starfall') {
+      this.spawnStarfall(player, timeSec);
+      return;
+    }
+    if (ev.kind === 'swarm') {
+      this.hooks?.onSkirmish('萤潮 — 星萤蛾成群贴上来', 'tide');
+      const count = this.boss.active ? 8 : 12;
+      for (let i = 0; i < count; i++) this.spawnKind(ENEMY_DEFS.embermoth, player, timeSec, 11, 17, false);
+      return;
+    }
+    if (ev.kind === 'pack') {
+      this.hooks?.onSkirmish('督卫小队 — 带词缀的深渊督卫结队进场', 'tide');
+      const count = this.boss.active ? 2 : 3;
+      for (let i = 0; i < count; i++) this.spawnKind(ELITE_DEF, player, timeSec, 13, 19, true);
+      return;
+    }
 
     if (this.boss.active) return;
     const def = BOSS_ROSTER[ev.bossIndex ?? 0] ?? BOSS_HORN;
     this.spawnBoss(def, player, timeSec);
+  }
+
+  private spawnStarfall(player: Player, timeSec: number): void {
+    const drops: { x: number; z: number; value: number }[] = [];
+    for (let i = 0; i < 14; i++) {
+      const pos = this.findSafe(player.position.x, player.position.z, 3.2, 8.5, 0.3, 8);
+      drops.push({ x: pos.x, z: pos.z, value: i % 4 === 0 ? 4 : 2 });
+    }
+    for (let i = 0; i < 4; i++) this.spawnKind(ENEMY_DEFS.embermoth, player, timeSec, 10, 16, false);
+    this.hooks?.onStarfall(drops);
+  }
+
+  private spawnKind(
+    def: EnemyDef,
+    player: Player,
+    timeSec: number,
+    distMin: number,
+    distMax: number,
+    forceElite: boolean,
+  ): void {
+    if (this.enemies.length >= 240 || !def) return;
+    const scale = enemyScale(timeSec);
+    const pos = this.findSafe(player.position.x, player.position.z, distMin, distMax, def.radius, 12);
+    const affix = rollAffixForSpawn(forceElite || def.kind === 'elite', def.kind, timeSec);
+    const enemy = this.enemyPool.acquire();
+    if (!enemy.mesh.parent) this.scene.add(enemy.mesh);
+    enemy.spawn(def, pos.x, pos.z, scale.hpMul, scale.speedMul, scale.dmgMul, affix);
+    this.enemies.push(enemy);
   }
 
   private spawnBoss(def: BossDef, player: Player, timeSec: number): void {

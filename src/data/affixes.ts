@@ -128,7 +128,7 @@ export function pickRandomAffix(): AffixDef {
 export function rollAffixForSpawn(elite: boolean, kind: string, timeSec: number): AffixDef | null {
   if (elite) return pickRandomAffix();
   // 虚空甲虫：首 Boss 后再抬词缀压力
-  if (kind === 'voidbeetle' && timeSec > 55 && Math.random() < 0.28) return pickRandomAffix();
+  if ((kind === 'voidbeetle' || kind === 'rockcrab') && timeSec > 70 && Math.random() < 0.24) return pickRandomAffix();
   // 普通怪词缀：中后期才出现，避免前 60s 随机暴毙
   if (timeSec > 80 && Math.random() < 0.07) return pickRandomAffix();
   if (timeSec > 130 && Math.random() < 0.11) return pickRandomAffix();

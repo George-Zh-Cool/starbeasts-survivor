@@ -16,7 +16,7 @@ export class World {
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x070814);
-    this.scene.fog = new THREE.FogExp2(0x12162c, 0.009);
+    this.scene.fog = new THREE.FogExp2(0x1a2448, 0.0075);
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 140);
     this.camera.position.set(0, 14.6, 11.4);
@@ -32,9 +32,9 @@ export class World {
     this.renderer.toneMapping = THREE.NoToneMapping;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
-    const hemi = new THREE.HemisphereLight(0xb7c6ff, 0x1a1424, 1.05);
+    const hemi = new THREE.HemisphereLight(0xc9d6ff, 0x24182c, 1.28);
     this.scene.add(hemi);
-    const dir = new THREE.DirectionalLight(0xffe6c4, 0.85);
+    const dir = new THREE.DirectionalLight(0xfff1d4, 1.05);
     dir.position.set(12, 22, 8);
     this.scene.add(dir);
 
@@ -60,7 +60,7 @@ export class World {
 
   /** 短促位移，上限压低，避免连续命中把镜头甩晕。 */
   impulse(amount: number): void {
-    this.shakeMag = Math.min(0.16, Math.max(this.shakeMag, amount));
+    this.shakeMag = Math.min(0.38, Math.max(this.shakeMag, amount));
   }
 
   follow(target: THREE.Vector3, dt: number, shakeDt = dt): void {
@@ -73,9 +73,9 @@ export class World {
     this.shakeY = 0;
     if (this.shakeMag > 0.002) {
       const s = this.shakeMag;
-      this.shakeX = Math.sin(this.shakeT * 16.5) * s;
-      this.shakeY = Math.cos(this.shakeT * 13.2) * s * 0.4;
-      this.shakeMag *= Math.exp(-shakeDt * 11);
+      this.shakeX = Math.sin(this.shakeT * 11) * s;
+      this.shakeY = Math.cos(this.shakeT * 9) * s * 0.55;
+      this.shakeMag *= Math.exp(-shakeDt * 6.2);
     }
     this.camera.position.x += this.shakeX;
     this.camera.position.y += this.shakeY;

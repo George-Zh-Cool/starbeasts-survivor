@@ -8,6 +8,7 @@ import {
 import {
   AUTO_EVOLVE_LEVEL,
   getWeaponForm,
+  type WeaponBranch,
   type WeaponForm,
   type WeaponTier,
 } from '../data/weapons';
@@ -30,6 +31,7 @@ export class Player {
   kills = 0;
   characterId: string;
   weaponTier: WeaponTier = 0;
+  weaponBranch: WeaponBranch = 'a';
   readonly ownedUpgrades = new Set<UpgradeId>();
   readonly activatedSynergies = new Set<string>();
   shieldOnKill = 0;
@@ -80,7 +82,7 @@ export class Player {
   }
 
   get weaponForm(): WeaponForm {
-    return getWeaponForm(this.characterId, this.weaponTier);
+    return getWeaponForm(this.characterId, this.weaponTier, this.weaponBranch);
   }
 
   get position(): THREE.Vector3 {
@@ -91,13 +93,15 @@ export class Player {
     return this.stats.hp > 0;
   }
 
-  evolveWeapon(): WeaponForm | null {
+  evolveWeapon(branch?: WeaponBranch): WeaponForm | null {
     if (this.weaponTier >= 2) return null;
-    this.weaponTier = (this.weaponTier + 1) as WeaponTier;
+    const next = (this.weaponTier + 1) as WeaponTier;
+    if (next === 2) this.weaponBranch = branch ?? 'a';
+    this.weaponTier = next;
     const form = this.weaponForm;
     this.stats.damage *= form.tier === 1 ? 1.08 : 1.1;
     if (this.weaponKind === 'aura') {
-      this.stats.auraRadius += form.tier === 1 ? 0.35 : 0.25;
+      this.stats.auraRadius += form.tier === 1 ? 0.35 : form.auraRings >= 3 ? 0.55 : 0.25;
     }
     return form;
   }
@@ -167,8 +171,11 @@ export class Player {
 
     const tier = 1 + this.weaponTier * 0.05;
     const breath = 1 + Math.sin(this.animTime * 3.2) * 0.028;
+    if (this.stats.regen > 0 && this.stats.hp > 0 && this.stats.hp < this.stats.maxHp) {
+      this.stats.hp = Math.min(this.stats.maxHp, this.stats.hp + this.stats.regen * dt);
+    }
     if (this.recoil > 0) this.recoil = Math.max(0, this.recoil - dt);
-    const squash = 1 - Math.min(0.07, this.recoil * 1.1);
+    const squash = 1 - Math.min(0.16, this.recoil * 1.35);
     const stretch = 1 + (1 - squash) * 0.65;
     this.modelRoot.scale.set(tier * breath * stretch, tier * breath * squash, 1);
     this.actor.place(this.animTime, moving);
@@ -183,7 +190,7 @@ export class Player {
   }
 
   nudgeRecoil(): void {
-    this.recoil = 0.05;
+    this.recoil = 0.12;
   }
 
   tickPulse(dt: number): boolean {
@@ -199,7 +206,7 @@ export class Player {
 
   takeDamage(amount: number): boolean {
     if (!this.alive || this.invuln > 0) return false;
-    let left = amount;
+    let left = amount * this.stats.armor;
     let applied = 0;
     if (this.stats.shield > 0) {
       const absorb = Math.min(this.stats.shield, left);

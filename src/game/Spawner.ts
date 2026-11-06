@@ -65,8 +65,11 @@ export class Spawner {
     }
   }
 
-  private pickDef(): EnemyDef {
-    const defs = Object.values(ENEMY_DEFS);
+  private pickDef(timeSec: number): EnemyDef {
+    const roll = Math.random();
+    if (timeSec >= 50 && roll < 0.18) return ENEMY_DEFS.embermoth;
+    if (timeSec >= 85 && roll < 0.3) return ENEMY_DEFS.rockcrab;
+    const defs = Object.values(ENEMY_DEFS).filter((d) => d.weight > 0);
     const total = defs.reduce((s, d) => s + d.weight, 0);
     let r = Math.random() * total;
     for (const d of defs) {
@@ -110,7 +113,7 @@ export class Spawner {
   }
 
   private spawnOne(player: Player, timeSec: number, elite: boolean): void {
-    const def = elite ? ELITE_DEF : this.pickDef();
+    const def = elite ? ELITE_DEF : this.pickDef(timeSec);
     const scale = enemyScale(timeSec);
     const pos = this.findSafeAround(
       player.position.x,

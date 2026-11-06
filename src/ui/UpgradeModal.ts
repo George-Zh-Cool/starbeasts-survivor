@@ -24,8 +24,9 @@ export class UpgradeModal {
       const rarityLabel = u.rarity === 'common' ? '普通' : u.rarity === 'rare' ? '稀有' : '史诗';
       const kindLabel =
         u.kind === 'evolve' ? '进化' : u.kind === 'trait' ? '词条' : '强化';
+      const tag = u.tag ? ` · ${u.tag}` : '';
       card.innerHTML = `
-        <span class="rarity ${u.rarity}">${rarityLabel} · ${kindLabel}</span>
+        <span class="rarity ${u.rarity}">${rarityLabel} · ${kindLabel}${tag}</span>
         <h3>${u.name}</h3>
         <p>${u.description}</p>
         ${u.synergyHint ? `<div class="synergy-hint">${u.synergyHint}</div>` : ''}

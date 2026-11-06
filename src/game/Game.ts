@@ -3,7 +3,7 @@ import { World } from './World';
 import { Input } from './Input';
 import { ObjectPool } from './ObjectPool';
 import { Spawner } from './Spawner';
-import { Combat } from './Combat';
+import { Combat, type ImpactKind } from './Combat';
 import { EventDirector } from './EventDirector';
 import { recordLocalRun, submitRun } from './HighScores';
 import { Player } from '../entities/Player';
@@ -24,6 +24,7 @@ import { ObstacleField } from './Obstacles';
 import { VirtualJoystick } from '../ui/VirtualJoystick';
 import { FloatTexts } from '../ui/FloatTexts';
 import { BALANCE, formatDifficultyDebug } from '../data/balance';
+import { applyMilestoneBonuses, milestoneIds, newlyUnlockedMilestones, recordBossKill } from './Milestones';
 
 type Phase = 'select' | 'playing' | 'paused' | 'levelup' | 'gameover';
 
@@ -70,7 +71,7 @@ export class Game {
   private readonly partPool = new ObjectPool(
     () => new HitParticle(),
     (p) => p.despawn(),
-    80,
+    180,
   );
 
   private spawner!: Spawner;
@@ -91,6 +92,11 @@ export class Game {
   private hitStop = 0;
   private bossHitCd = 0;
   private realDt = 0;
+  private killWindow = 0;
+  private killStreak = 0;
+  private cascadeCd = 0;
+  private novaGuard = false;
+  private milestoneSnap = new Set<string>();
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.canvas = canvas;
@@ -117,7 +123,8 @@ export class Game {
     this.events = new EventDirector(this.world.scene, this.enemyPool, this.enemies, this.boss);
     this.combat.floatHook = (kind, amount, x, z) => {
       if (!this.world.worldToScreen(x, 1.1, z, this.screenTmp)) return;
-      const label = kind === 'crit' ? `暴击 ${amount}` : kind === 'hurt' ? `-${amount}` : String(amount);
+      const label =
+        kind === 'crit' ? `暴击 ${amount}` : kind === 'hurt' ? `-${amount}` : kind === 'heavy' ? `${amount}` : String(amount);
       this.floats.spawn(this.screenTmp.x, this.screenTmp.y, label, kind);
     };
     this.combat.impactHook = (kind) => this.onImpact(kind);
@@ -135,6 +142,16 @@ export class Game {
       },
       onBossSpawned: () => {
         this.spawner.bossPresent = true;
+      },
+      onStarfall: (drops) => {
+        for (const drop of drops) this.combat.spawnOrb(drop.x, drop.z, drop.value);
+        audio.playStarfall();
+        this.hud.showEventBanner('✦ 星屑雨 — 捡起散落的星尘', 'reward', 2.6);
+      },
+      onSkirmish: (text, kind) => {
+        if (kind === 'tide') audio.playEliteTide();
+        else audio.playStarfall();
+        this.hud.showEventBanner(text, kind, 2.6);
       },
       onBossDefeated: (name, xp) => {
         audio.playBossDefeat();
@@ -188,6 +205,11 @@ export class Game {
     this.elapsed = 0;
     this.hitStop = 0;
     this.bossHitCd = 0;
+    this.killWindow = 0;
+    this.killStreak = 0;
+    this.cascadeCd = 0;
+    this.milestoneSnap = milestoneIds();
+    const bonuses = applyMilestoneBonuses(this.player.stats);
     this.pendingLevels = 0;
     this.briefRewardTimer = 0;
     this.rewardActive = false;
@@ -200,6 +222,14 @@ export class Game {
     this.hud.setVisible(true);
     this.hud.hideBossBar();
     this.hud.setPausedBanner('protect');
+    if (bonuses.length > 0) {
+      const names = bonuses
+        .slice(0, 3)
+        .map((m) => m.name)
+        .join('、');
+      const extra = bonuses.length > 3 ? ` 等 ${bonuses.length} 项` : '';
+      this.hud.showEventBanner(`本机加成已计入 · ${names}${extra}`, 'reward', 2.8);
+    }
     this.floats.clear();
     this.joystick.setVisible(true);
     this.canvas.focus();
@@ -257,36 +287,61 @@ export class Game {
     let dt = realDt;
     if (this.phase === 'playing' && this.hitStop > 0) {
       this.hitStop = Math.max(0, this.hitStop - realDt);
-      dt = realDt * 0.08;
+      dt = 0;
     }
     this.update(dt);
     this.world.render();
     this.raf = requestAnimationFrame(this.frame);
   };
 
-  private addHitStop(sec: number): void {
-    this.hitStop = Math.min(0.05, this.hitStop + sec);
+  private addHitStop(sec: number, stack = false): void {
+    this.hitStop = Math.min(0.1, stack ? this.hitStop + sec : Math.max(this.hitStop, sec));
   }
 
-  private onImpact(kind: 'hit' | 'kill' | 'bosshit' | 'hurt'): void {
+  private onImpact(kind: ImpactKind): void {
     if (kind === 'hit') {
       audio.playHit();
+      this.world.impulse(0.075);
+      return;
+    }
+    if (kind === 'crit') {
+      audio.playHitHeavy();
+      this.addHitStop(0.038);
+      this.world.impulse(0.16);
+      this.hud.flash(0.12);
       return;
     }
     if (kind === 'kill') {
-      this.addHitStop(0.032);
-      this.world.impulse(0.05);
+      this.addHitStop(0.055, true);
+      this.world.impulse(0.18);
+      return;
+    }
+    if (kind === 'elite') {
+      audio.playHitHeavy();
+      this.addHitStop(0.078, true);
+      this.world.impulse(0.26);
+      this.hud.flash(0.16);
       return;
     }
     if (kind === 'bosshit') {
       if (this.bossHitCd > 0) return;
-      this.bossHitCd = 0.12;
-      this.addHitStop(0.02);
-      this.world.impulse(0.04);
+      this.bossHitCd = 0.09;
+      audio.playBossHit();
+      this.addHitStop(0.046);
+      this.world.impulse(0.22);
+      this.hud.flash(0.18);
       return;
     }
-    this.addHitStop(0.026);
-    this.world.impulse(0.07);
+    if (kind === 'bosskill') {
+      audio.playBossHit();
+      this.addHitStop(0.096);
+      this.world.impulse(0.36);
+      this.hud.flash(0.32);
+      return;
+    }
+    this.addHitStop(0.032);
+    this.world.impulse(0.12);
+    this.hud.flash(0.14);
   }
 
   private update(dt: number): void {
@@ -308,6 +363,11 @@ export class Game {
     // playing
     this.elapsed += dt;
     if (this.bossHitCd > 0) this.bossHitCd = Math.max(0, this.bossHitCd - this.realDt);
+    if (this.cascadeCd > 0) this.cascadeCd = Math.max(0, this.cascadeCd - this.realDt);
+    if (this.killWindow > 0) {
+      this.killWindow = Math.max(0, this.killWindow - this.realDt);
+      if (this.killWindow <= 0) this.killStreak = 0;
+    }
 
     if (this.spawnProtectLeft > 0) {
       this.spawnProtectLeft -= dt;
@@ -416,10 +476,11 @@ export class Game {
       const dz = player.position.z - orb.mesh.position.z;
       const dist = Math.hypot(dx, dz);
       const pick = player.stats.pickupRadius;
-      if (dist < pick * 1.8) {
-        const pull = Math.min(1, (pick * 1.8 - dist) / (pick * 1.8));
-        orb.mesh.position.x += dx * pull * dt * 8;
-        orb.mesh.position.z += dz * pull * dt * 8;
+      const magnet = pick * 2.8;
+      if (dist < magnet) {
+        const pull = Math.min(1, (magnet - dist) / magnet);
+        orb.mesh.position.x += dx * pull * dt * 14;
+        orb.mesh.position.z += dz * pull * dt * 14;
       }
       if (
         dist < 0.7 ||
@@ -496,6 +557,20 @@ export class Game {
     const x = enemy.mesh.position.x;
     const z = enemy.mesh.position.z;
     this.combat.spawnOrb(x, z, enemy.xp);
+    this.noteCascade();
+    if (!this.novaGuard && player.stats.killNova > 0) {
+      this.novaGuard = true;
+      this.combat.damageNova(
+        x,
+        z,
+        player.stats.killNova,
+        player.stats.damage * player.weaponForm.damageMul * player.stats.killNovaRatio,
+        player,
+        this.enemies,
+        (next) => this.onEnemyKilled(next),
+      );
+      this.novaGuard = false;
+    }
 
     const affix = enemy.affix;
     if (!affix) return;
@@ -527,10 +602,23 @@ export class Game {
     if (!player) return;
     player.kills += 1;
     player.healOnKill();
-    this.addHitStop(0.048);
-    this.world.impulse(0.13);
-    this.combat.fxBurst(this.boss.group.position.x, 1.1, this.boss.group.position.z, 0xfff6c8);
+    recordBossKill();
+    this.combat.fxBurst(this.boss.group.position.x, 1.15, this.boss.group.position.z, 0xfff6c8);
+    this.combat.fxBurst(this.boss.group.position.x, 1.4, this.boss.group.position.z, 0xff9f1c);
     this.events.notifyBossDefeated();
+  }
+
+  private noteCascade(): void {
+    if (this.killWindow <= 0) this.killStreak = 0;
+    this.killWindow = 0.48;
+    this.killStreak += 1;
+    if (this.killStreak < 4 || this.cascadeCd > 0) return;
+    this.cascadeCd = 0.4;
+    this.addHitStop(0.042, true);
+    this.world.impulse(0.28);
+    audio.playCascade();
+    this.hud.flash(0.24);
+    this.floats.spawn(window.innerWidth * 0.5, window.innerHeight * 0.36, `连破 ${this.killStreak}`, 'heavy');
   }
 
   private refreshHud(player: Player): void {
@@ -619,7 +707,7 @@ export class Game {
     const player = this.player;
 
     if (u.kind === 'evolve' || u.id === 'evolve') {
-      const form = player.evolveWeapon();
+      const form = player.evolveWeapon(u.evolveBranch);
       if (form) this.announceEvolve(form.name, false);
     } else {
       u.apply(player.stats, player.level);
@@ -669,6 +757,7 @@ export class Game {
       characterId: this.selectedDef?.id ?? '',
       characterName: name,
     });
+    const fresh = newlyUnlockedMilestones(this.milestoneSnap);
     this.gameOverUi.show(
       this.uiRoot,
       {
@@ -677,6 +766,7 @@ export class Game {
         kills: p.kills,
         characterName: name,
         highs,
+        milestones: fresh.map((m) => `${m.name}：${m.reward}`),
       },
       () => {
         if (this.selectedDef) this.startRun(this.selectedDef);

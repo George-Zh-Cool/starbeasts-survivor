@@ -10,6 +10,8 @@ import {
   type LocalRun,
 } from '../game/HighScores';
 import { portraitURL, warmupSprites, type CreatureId } from '../visual/sprites';
+import { describeWeaponPaths } from '../data/weapons';
+import { listMilestones, type Milestone } from '../game/Milestones';
 
 type SortKey = 'time' | 'kills';
 type PanelId = 'dex' | 'lab' | 'ach' | 'rank' | 'squad' | 'settings' | 'lang' | 'profile';
@@ -79,6 +81,8 @@ function dexEntries(): DexEntry[] {
     { id: 'crystal', name: '暗晶兽', kind: '暗潮', blurb: '最常见的晶簇，走得慢，一波里数量最多。' },
     { id: 'wolf', name: '裂影狼', kind: '暗潮', blurb: '血薄但跑得快，喜欢从侧边贴上来。' },
     { id: 'beetle', name: '虚空甲虫', kind: '暗潮', blurb: '甲壳更厚，经验更多，中后期有机会带词缀。' },
+    { id: 'moth', name: '星萤蛾', kind: '暗潮', blurb: '又轻又快，喜欢横着绕。萤潮和星屑雨时会成群出现。' },
+    { id: 'crab', name: '岩壳蟹', kind: '暗潮', blurb: '壳厚步慢，大约一分半之后混进暗潮，偶尔带着词缀。' },
     { id: 'elite', name: '深渊督卫', kind: '暗潮', blurb: '体型更大，进场时必定带着一个词缀。' },
     { id: 'horn', name: '裂空巨角', kind: '大体型', blurb: '大约 60 秒进场，会冲撞，可以拉开距离风筝。' },
     { id: 'core', name: '星环邪核', kind: '大体型', blurb: '大约 120 秒进场，撒环形弹幕并召唤小怪。' },
@@ -138,6 +142,7 @@ export class CharacterSelect {
   private readonly highs: HighScores;
   private readonly runs: LocalRun[];
   private readonly achievements: Achievement[];
+  private readonly milestones: Milestone[];
   private preferredId: string;
   private boardSort: SortKey = 'time';
   private pick: HTMLDivElement | null = null;
@@ -157,6 +162,7 @@ export class CharacterSelect {
     this.highs = loadHighScores();
     this.runs = loadLocalRuns();
     this.achievements = buildAchievements(this.highs, this.runs);
+    this.milestones = listMilestones();
     const stored = loadPreferredId();
     this.preferredId = characterById(stored) ? stored : '';
 
@@ -183,8 +189,14 @@ export class CharacterSelect {
   private homeHtml(): string {
     const unlocked = this.achievements.filter((a) => a.unlocked).length;
     const next = this.achievements.find((a) => !a.unlocked);
-    const goalTitle = next ? next.name : '成就已满';
-    const goalBody = next ? next.detail : '这台设备上的成就都点亮了。';
+    const nextMile = this.milestones.find((m) => !m.unlocked);
+    const mileOn = this.milestones.filter((m) => m.unlocked).length;
+    const goalTitle = nextMile ? nextMile.name : next ? next.name : '目标已满';
+    const goalBody = nextMile
+      ? `${nextMile.detail}。达成后下局：${nextMile.reward}`
+      : next
+        ? next.detail
+        : '这台设备上的目标和加成都点亮了。';
     const achBadge = unlocked > 0 ? `<i class="lb-count">${unlocked}</i>` : '';
     const runBadge = this.runs.length > 0 ? `<i class="lb-count quiet">${this.runs.length}</i>` : '';
     return `
@@ -211,7 +223,7 @@ export class CharacterSelect {
               <div class="lb-brand-en">STARBEASTS</div>
               <h1 class="lb-logo"><span>星兽</span><span class="gold">突围</span></h1>
             </div>
-            <span class="lb-ver">试炼版 v0.1.0</span>
+            <span class="lb-ver">试炼版 v0.2.0</span>
           </div>
           <div class="lb-bento">
             <button type="button" class="lb-start" data-start>
@@ -243,7 +255,7 @@ export class CharacterSelect {
             </button>
             <div class="lb-memo">
               <span class="lb-memo-kicker">暗潮备忘</span>
-              <p>60 秒左右裂空巨角进场，120 秒左右星环邪核进场。纪录只写在这台浏览器。</p>
+              <p>40 秒星屑雨，55 秒萤潮，60 秒裂空巨角。开局加成只写在这台浏览器，已点亮 ${mileOn}/${this.milestones.length}。</p>
             </div>
             <button type="button" class="lb-goal" data-panel="ach">
               <span class="lb-memo-kicker">下一目标 · ${unlocked}/${this.achievements.length}</span>
@@ -497,7 +509,10 @@ export class CharacterSelect {
       return;
     }
     if (id === 'ach') {
-      this.openSheet('成就', `<p class="lb-sheet-lead">由这台浏览器里的纪录点亮，没有在线成就。</p>${this.achHtml()}`);
+      this.openSheet(
+        '成就',
+        `<p class="lb-sheet-lead">纪录和开局加成都只在这台浏览器里。点亮之后，从下一局开始生效。</p>${this.mileHtml()}${this.achHtml()}`,
+      );
       return;
     }
     if (id === 'rank') {
@@ -593,7 +608,41 @@ export class CharacterSelect {
     return `<div class="lb-dex">${cards}</div>`;
   }
 
+  private mileHtml(): string {
+    const cards = this.milestones
+      .map((item) => {
+        const state = item.unlocked ? 'is-on' : 'is-locked';
+        const mark = item.unlocked ? '成' : '锁';
+        return `
+          <article class="lb-ach ${state}">
+            <span class="lb-ach-mark">${mark}</span>
+            <div>
+              <b>${esc(item.name)}</b>
+              <p>${esc(item.detail)}。下局：${esc(item.reward)}</p>
+            </div>
+            <em>${item.unlocked ? '下局生效' : '未达成'}</em>
+          </article>
+        `;
+      })
+      .join('');
+    return `<h3 class="lb-sheet-lead">开局加成</h3><div class="lb-ach-list">${cards}</div>`;
+  }
+
   private labHtml(): string {
+    const paths = CHARACTERS.map((c) => {
+      const steps = describeWeaponPaths(c.id)
+        .map((step) => `<li><b>${esc(step.step)} · ${esc(step.name)}</b> ${esc(step.description)}</li>`)
+        .join('');
+      return `
+        <article class="lb-lab-card">
+          <img alt="" src="${portraitURL(c.shape)}" />
+          <div>
+            <b>${esc(c.name)}</b>
+            <ul class="lb-path">${steps}</ul>
+          </div>
+        </article>
+      `;
+    }).join('');
     const cards = CHARACTERS.map((c) => {
       const weapon = c.weaponKind === 'aura' ? '环攻' : '弹道';
       return `
@@ -613,8 +662,8 @@ export class CharacterSelect {
       `;
     }).join('');
     return `
-      <p class="lb-soon-banner">建设中</p>
-      <p class="lb-sheet-lead">强化实验还没开放。下面是现在就能出战的星兽档案，只读，不能在这里改数值。</p>
+      <p class="lb-sheet-lead">终阶可以走甲或乙。升级时能亲手选；拖到 14 级还没选，会自动走上甲。下面只读，不能在这里改数值。</p>
+      <div class="lb-lab">${paths}</div>
       <div class="lb-lab">${cards}</div>
     `;
   }
