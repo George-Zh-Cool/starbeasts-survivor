@@ -8,6 +8,8 @@ export class HitParticle {
   life = 0;
   maxLife = 0.4;
   readonly velocity = new THREE.Vector3();
+  private pop = false;
+  private baseScale = 0.3;
 
   constructor() {
     this.material = new THREE.SpriteMaterial({
@@ -23,33 +25,40 @@ export class HitParticle {
     this.mesh.visible = false;
   }
 
-  spawn(x: number, y: number, z: number, color: number): void {
+  spawn(x: number, y: number, z: number, color: number, power = 1, pop = false): void {
     this.active = true;
-    this.maxLife = 0.38 + Math.random() * 0.32;
+    this.pop = pop;
+    this.maxLife = pop ? 0.12 + Math.random() * 0.05 : 0.2 + Math.random() * 0.14;
     this.life = this.maxLife;
     this.mesh.visible = true;
     this.mesh.position.set(x, y, z);
-    this.mesh.scale.setScalar(0.16 + Math.random() * 0.28);
-    this.material.map = sparkTexture(Math.floor(Math.random() * 3));
+    this.baseScale = (pop ? 0.62 : 0.34) * power * (0.85 + Math.random() * 0.3);
+    this.mesh.scale.setScalar(this.baseScale * (pop ? 0.45 : 1));
+    this.material.map = sparkTexture(pop ? 1 : Math.floor(Math.random() * 3));
     this.material.color.setHex(color);
     this.material.opacity = 1;
     this.material.rotation = Math.random() * Math.PI;
     const a = Math.random() * Math.PI * 2;
-    const sp = 3.5 + Math.random() * 6;
-    this.velocity.set(Math.cos(a) * sp, 2.5 + Math.random() * 4.5, Math.sin(a) * sp);
+    const sp = (pop ? 1.4 : 5.5) * power * (0.75 + Math.random() * 0.5);
+    this.velocity.set(Math.cos(a) * sp, (pop ? 0.4 : 2.2) + Math.random() * (pop ? 0.6 : 3.2), Math.sin(a) * sp);
   }
 
   update(dt: number): void {
     if (!this.active) return;
-    this.velocity.y -= 14 * dt;
+    this.velocity.y -= (this.pop ? 2 : 16) * dt;
     this.mesh.position.x += this.velocity.x * dt;
     this.mesh.position.y += this.velocity.y * dt;
     this.mesh.position.z += this.velocity.z * dt;
-    this.material.rotation += dt * 8;
+    this.material.rotation += dt * (this.pop ? 2 : 10);
     this.life -= dt;
     const t = Math.max(0, this.life / this.maxLife);
     this.material.opacity = t;
-    this.mesh.scale.multiplyScalar(0.97);
+    if (this.pop) {
+      const grow = 1 - t;
+      this.mesh.scale.setScalar(this.baseScale * (0.45 + grow * 1.15));
+    } else {
+      this.mesh.scale.multiplyScalar(0.96);
+    }
     if (this.life <= 0 || this.mesh.position.y < -0.2) this.despawn();
   }
 

@@ -88,6 +88,9 @@ export class Game {
   private rewardIntervalFactor = 1;
   private spawnProtectLeft = 0;
   private showDiffDebug = false;
+  private hitStop = 0;
+  private bossHitCd = 0;
+  private realDt = 0;
 
   constructor(canvas: HTMLCanvasElement, uiRoot: HTMLElement) {
     this.canvas = canvas;
@@ -117,6 +120,7 @@ export class Game {
       const label = kind === 'crit' ? `暴击 ${amount}` : kind === 'hurt' ? `-${amount}` : String(amount);
       this.floats.spawn(this.screenTmp.x, this.screenTmp.y, label, kind);
     };
+    this.combat.impactHook = (kind) => this.onImpact(kind);
     window.addEventListener('keydown', this.onPauseKey);
     this.spawner.setObstacles(this.obstacleField);
     this.events.setObstacles(this.obstacleField);
@@ -182,6 +186,8 @@ export class Game {
     this.spawner.reset();
     this.events.reset();
     this.elapsed = 0;
+    this.hitStop = 0;
+    this.bossHitCd = 0;
     this.pendingLevels = 0;
     this.briefRewardTimer = 0;
     this.rewardActive = false;
@@ -245,12 +251,43 @@ export class Game {
 
   private frame = (ts: number): void => {
     if (!this.running) return;
-    const dt = Math.min(0.05, (ts - this.lastTs) / 1000);
+    const realDt = Math.min(0.05, (ts - this.lastTs) / 1000);
     this.lastTs = ts;
+    this.realDt = realDt;
+    let dt = realDt;
+    if (this.phase === 'playing' && this.hitStop > 0) {
+      this.hitStop = Math.max(0, this.hitStop - realDt);
+      dt = realDt * 0.08;
+    }
     this.update(dt);
     this.world.render();
     this.raf = requestAnimationFrame(this.frame);
   };
+
+  private addHitStop(sec: number): void {
+    this.hitStop = Math.min(0.05, this.hitStop + sec);
+  }
+
+  private onImpact(kind: 'hit' | 'kill' | 'bosshit' | 'hurt'): void {
+    if (kind === 'hit') {
+      audio.playHit();
+      return;
+    }
+    if (kind === 'kill') {
+      this.addHitStop(0.032);
+      this.world.impulse(0.05);
+      return;
+    }
+    if (kind === 'bosshit') {
+      if (this.bossHitCd > 0) return;
+      this.bossHitCd = 0.12;
+      this.addHitStop(0.02);
+      this.world.impulse(0.04);
+      return;
+    }
+    this.addHitStop(0.026);
+    this.world.impulse(0.07);
+  }
 
   private update(dt: number): void {
     if (this.phase === 'select' || this.phase === 'gameover') {
@@ -263,13 +300,14 @@ export class Game {
     this.hud.tickBanner(dt);
 
     if (this.phase === 'levelup' || this.phase === 'paused') {
-      this.world.follow(player.position, dt);
+      this.world.follow(player.position, dt, this.realDt);
       this.refreshHud(player);
       return;
     }
 
     // playing
     this.elapsed += dt;
+    if (this.bossHitCd > 0) this.bossHitCd = Math.max(0, this.bossHitCd - this.realDt);
 
     if (this.spawnProtectLeft > 0) {
       this.spawnProtectLeft -= dt;
@@ -303,7 +341,7 @@ export class Game {
     for (const e of this.enemies) {
       if (e.active) {
         e.update(dt, player.position.x, player.position.z);
-        this.obstacleField.resolveCircle(e.mesh.position, e.radius * 0.85);
+        if (!e.dying) this.obstacleField.resolveCircle(e.mesh.position, e.radius * 0.85);
       }
     }
 
@@ -398,7 +436,7 @@ export class Game {
       }
     }
 
-    this.world.follow(player.position, dt);
+    this.world.follow(player.position, dt, this.realDt);
     this.refreshHud(player);
 
     if (!player.alive) {
@@ -489,6 +527,9 @@ export class Game {
     if (!player) return;
     player.kills += 1;
     player.healOnKill();
+    this.addHitStop(0.048);
+    this.world.impulse(0.13);
+    this.combat.fxBurst(this.boss.group.position.x, 1.1, this.boss.group.position.z, 0xfff6c8);
     this.events.notifyBossDefeated();
   }
 

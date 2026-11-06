@@ -167,19 +167,30 @@ export class AudioManager {
   }
 
   playShoot(): void {
-    this.tone(660, 0.07, 'square', 0.05, 420);
+    this.tone(780, 0.042, 'square', 0.05, 440);
+    this.noiseBurst(0.02, 0.028, 2100);
   }
 
   playAuraTick(): void {
     this.tone(280, 0.04, 'sine', 0.03);
   }
 
+  playHit(): void {
+    const now = performance.now();
+    if (now - this.hitLast < 42) return;
+    this.hitLast = now;
+    this.tone(980, 0.032, 'square', 0.042, 520);
+    this.noiseBurst(0.025, 0.035, 1900);
+  }
+
   playKill(): void {
-    this.tone(220, 0.1, 'sawtooth', 0.07, 90);
-    this.noiseBurst(0.06, 0.05, 800);
+    this.tone(620, 0.04, 'square', 0.055, 340);
+    this.tone(190, 0.07, 'sawtooth', 0.065, 70);
+    this.noiseBurst(0.045, 0.05, 1500);
   }
 
   private pickupLast = 0;
+  private hitLast = 0;
   private readonly pickupMinGapMs = 55;
 
   playPickup(): void {
@@ -190,9 +201,9 @@ export class AudioManager {
   }
 
   playLevelUp(): void {
-    this.tone(523, 0.1, 'triangle', 0.08);
-    setTimeout(() => this.tone(659, 0.1, 'triangle', 0.08), 80);
-    setTimeout(() => this.tone(784, 0.16, 'triangle', 0.09), 160);
+    this.tone(523, 0.07, 'triangle', 0.09);
+    setTimeout(() => this.tone(659, 0.07, 'triangle', 0.09), 52);
+    setTimeout(() => this.tone(1046, 0.12, 'sine', 0.07), 104);
   }
 
   playHurt(): void {

@@ -27,6 +27,8 @@ export class Combat {
   private floatCritCd = 0;
   /** 飘字回调：kind, 数值, 世界 xz */
   floatHook: ((kind: 'hurt' | 'crit' | 'dmg', amount: number, x: number, z: number) => void) | null = null;
+  /** 命中手感：普通命中 / 击杀 / 打中 Boss / 玩家受伤 */
+  impactHook: ((kind: 'hit' | 'kill' | 'bosshit' | 'hurt') => void) | null = null;
 
   constructor(
     scene: THREE.Scene,
@@ -143,8 +145,9 @@ export class Combat {
       const doPulse = player.tickPulse(dt);
       if (doPulse) {
         this.pulseFlash = 0.35;
-        this.burst(player.position.x, 0.4, player.position.z, player.accent);
-        this.burst(player.position.x, 0.5, player.position.z, player.color);
+        player.nudgeRecoil();
+        this.burst(player.position.x, 0.45, player.position.z, player.accent, 5, 1.1, true);
+        this.impactHook?.('hit');
       }
 
       const dps = (player.stats.damage * form.damageMul / Math.max(0.12, player.stats.attackInterval)) * dt;
@@ -154,7 +157,7 @@ export class Combat {
       const pulseForce = doPulse ? form.pulseForce + player.stats.knockback : 0;
 
       for (const e of enemies) {
-        if (!e.active) continue;
+        if (!e.active || e.dying) continue;
         const dx = e.mesh.position.x - player.position.x;
         const dz = e.mesh.position.z - player.position.z;
         const distSq = dx * dx + dz * dz;
@@ -172,7 +175,7 @@ export class Combat {
           if (pulseForce > 0) e.applyKnockback(dx, dz, pulseForce);
           else if (player.stats.knockback > 0) e.applyKnockback(dx, dz, player.stats.knockback * dt * 4);
           if (died) {
-            this.burst(e.mesh.position.x, 0.6, e.mesh.position.z, 0x90e0ef);
+            this.punchKill(e.mesh.position.x, e.mesh.position.z, 0x90e0ef);
             onKill(e);
           }
         }
@@ -184,8 +187,11 @@ export class Combat {
           let dmg = dps + pulseDmg;
           const died = boss.takeDamage(dmg);
           if (died) {
-            this.burst(boss.group.position.x, 1.2, boss.group.position.z, 0xffd166);
+            this.burst(boss.group.position.x, 1.2, boss.group.position.z, 0xffd166, 8, 1.5, true);
+            this.impactHook?.('kill');
             onBossKill();
+          } else if (doPulse) {
+            this.impactHook?.('bosshit');
           }
         }
       }
@@ -202,7 +208,7 @@ export class Combat {
       }
       let consumed = false;
       for (const e of enemies) {
-        if (!e.active || p.hitEnemies.has(e.id)) continue;
+        if (!e.active || e.dying || p.hitEnemies.has(e.id)) continue;
         const dx = e.mesh.position.x - p.mesh.position.x;
         const dz = e.mesh.position.z - p.mesh.position.z;
         const rr = e.radius + 0.2 * (p.mesh.scale.x);
@@ -211,7 +217,8 @@ export class Combat {
           const died = e.takeDamage(p.damage);
           if (p.crit) this.emitCritFloat(p.damage, e.mesh.position.x, e.mesh.position.z);
           if (p.knockback > 0) e.applyKnockback(p.velocity.x, p.velocity.z, p.knockback);
-          this.burst(e.mesh.position.x, 0.7, e.mesh.position.z, player.color);
+          if (died) this.punchKill(e.mesh.position.x, e.mesh.position.z, player.color);
+          else this.punchHit(e.mesh.position.x, e.mesh.position.z, p.crit ? 0xfff1a8 : player.color);
           this.applySplash(player, enemies, boss, e.mesh.position.x, e.mesh.position.z, p, onKill, onBossKill, e.id);
           if (died) onKill(e);
           else this.tryChain(enemies, p, e);
@@ -232,7 +239,8 @@ export class Combat {
           p.hitEnemies.add(-1);
           const died = boss.takeDamage(p.damage);
           if (p.crit) this.emitCritFloat(p.damage, boss.group.position.x, boss.group.position.z);
-          this.burst(boss.group.position.x, 1.0, boss.group.position.z, player.color);
+          this.burst(boss.group.position.x, 1.0, boss.group.position.z, player.color, 5, 1.2, true);
+          this.impactHook?.(died ? 'kill' : 'bosshit');
           this.applySplash(player, enemies, boss, boss.group.position.x, boss.group.position.z, p, onKill, onBossKill, -1);
           if (died) onBossKill();
           if (p.pierceLeft <= 0) {
@@ -303,6 +311,7 @@ export class Combat {
         const hit = player.takeDamage(h.damage);
         if (hit) {
           this.emitHurtFloat(player);
+          this.impactHook?.('hurt');
           if (this.hurtSoundCd <= 0) {
             audio.playHurt();
             this.hurtSoundCd = 0.35;
@@ -318,7 +327,7 @@ export class Combat {
     // Contact
     if (player.alive) {
       for (const e of enemies) {
-        if (!e.active) continue;
+        if (!e.active || e.dying) continue;
         const dx = e.mesh.position.x - player.position.x;
         const dz = e.mesh.position.z - player.position.z;
         const rr = e.radius + 0.45;
@@ -326,6 +335,7 @@ export class Combat {
           const hit = player.takeDamage(e.contactDamage);
           if (hit) {
             this.emitHurtFloat(player);
+            this.impactHook?.('hurt');
             if (this.hurtSoundCd <= 0) {
               audio.playHurt();
               this.hurtSoundCd = 0.35;
@@ -344,6 +354,7 @@ export class Combat {
           const hit = player.takeDamage(boss.contactDamage);
           if (hit) {
             this.emitHurtFloat(player);
+            this.impactHook?.('hurt');
             if (this.hurtSoundCd <= 0) {
               audio.playHurt();
               this.hurtSoundCd = 0.35;
@@ -385,9 +396,13 @@ export class Combat {
       const dx = e.mesh.position.x - x;
       const dz = e.mesh.position.z - z;
       if (dx * dx + dz * dz <= radius * radius) {
+        if (e.dying) continue;
         const died = e.takeDamage(splashDmg);
         if (p.knockback > 0) e.applyKnockback(dx, dz, p.knockback * 0.6);
-        if (died) onKill(e);
+        if (died) {
+          this.punchKill(e.mesh.position.x, e.mesh.position.z, player.accent);
+          onKill(e);
+        }
       }
     }
     if (boss?.active && skipId !== -1) {
@@ -395,6 +410,7 @@ export class Combat {
       const dz = boss.group.position.z - z;
       if (dx * dx + dz * dz <= (radius + boss.radius * 0.3) ** 2) {
         const died = boss.takeDamage(splashDmg * 0.7);
+        this.impactHook?.(died ? 'kill' : 'bosshit');
         if (died) onBossKill();
       }
     }
@@ -405,7 +421,7 @@ export class Combat {
     let best: Enemy | null = null;
     let bestD = 64; // 8^2
     for (const e of enemies) {
-      if (!e.active || p.hitEnemies.has(e.id)) continue;
+      if (!e.active || e.dying || p.hitEnemies.has(e.id)) continue;
       const dx = e.mesh.position.x - from.mesh.position.x;
       const dz = e.mesh.position.z - from.mesh.position.z;
       const d = dx * dx + dz * dz;
@@ -448,10 +464,11 @@ export class Combat {
       const dir = baseDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), t);
       const p = this.projPool.acquire();
       if (!p.mesh.parent) this.scene.add(p.mesh);
+      const muzzle = 0.7;
       p.spawn(
-        player.position.x,
-        0.7,
-        player.position.z,
+        player.position.x + dir.x * muzzle,
+        0.75,
+        player.position.z + dir.z * muzzle,
         dir.x,
         dir.z,
         player.stats.projectileSpeed,
@@ -471,6 +488,8 @@ export class Combat {
       );
       this.projectiles.push(p);
     }
+    player.nudgeRecoil();
+    this.burst(player.position.x + baseDir.x * 0.45, 0.8, player.position.z + baseDir.z * 0.45, color, 3, 0.7);
   }
 
   private findNearest(
@@ -481,7 +500,7 @@ export class Combat {
     let bestD = Infinity;
     let best: { x: number; z: number } | null = null;
     for (const e of enemies) {
-      if (!e.active) continue;
+      if (!e.active || e.dying) continue;
       const dx = e.mesh.position.x - player.position.x;
       const dz = e.mesh.position.z - player.position.z;
       const d = dx * dx + dz * dz;
@@ -506,12 +525,23 @@ export class Combat {
     this.burst(x, y, z, color);
   }
 
-  private burst(x: number, y: number, z: number, color: number): void {
-    const n = 7;
-    for (let i = 0; i < n; i++) {
+  private punchHit(x: number, z: number, color: number): void {
+    this.burst(x, 0.75, z, color, 4, 1.15);
+    this.burst(x, 0.85, z, 0xfff6ee, 1, 1.25, true);
+    this.impactHook?.('hit');
+  }
+
+  private punchKill(x: number, z: number, color: number): void {
+    this.burst(x, 0.7, z, color, 6, 1.35);
+    this.burst(x, 0.9, z, 0xfff6ee, 2, 1.6, true);
+    this.impactHook?.('kill');
+  }
+
+  private burst(x: number, y: number, z: number, color: number, count = 5, power = 1, pop = false): void {
+    for (let i = 0; i < count; i++) {
       const pt = this.partPool.acquire();
       if (!pt.mesh.parent) this.scene.add(pt.mesh);
-      pt.spawn(x, y, z, color);
+      pt.spawn(x, y, z, color, power, pop);
       this.particles.push(pt);
     }
   }
