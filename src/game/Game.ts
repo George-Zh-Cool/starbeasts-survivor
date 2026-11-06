@@ -5,7 +5,7 @@ import { ObjectPool } from './ObjectPool';
 import { Spawner } from './Spawner';
 import { Combat } from './Combat';
 import { EventDirector } from './EventDirector';
-import { submitRun } from './HighScores';
+import { recordLocalRun, submitRun } from './HighScores';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/Enemy';
 import { Projectile } from '../entities/Projectile';
@@ -621,6 +621,13 @@ export class Game {
     const p = this.player!;
     const name = this.selectedDef?.name ?? '星兽';
     const highs = submitRun(this.elapsed, p.kills);
+    recordLocalRun({
+      timeSec: this.elapsed,
+      kills: p.kills,
+      level: p.level,
+      characterId: this.selectedDef?.id ?? '',
+      characterName: name,
+    });
     this.gameOverUi.show(
       this.uiRoot,
       {

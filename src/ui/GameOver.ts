@@ -35,7 +35,7 @@ export class GameOver {
           <div class="high-row"><span>本机最高击杀</span><span>${stats.highs.bestKills}</span></div>
         </div>
         <button class="btn" type="button" data-restart>再来一局</button>
-        <button class="btn secondary" type="button" data-menu>返回选角</button>
+        <button class="btn secondary" type="button" data-menu>返回大厅</button>
       </div>
     `;
     this.overlay.querySelector('[data-restart]')!.addEventListener('click', () => {
