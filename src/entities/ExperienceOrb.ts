@@ -9,7 +9,7 @@ export class ExperienceOrb {
   value = 1;
   private bob = 0;
   private readonly aspect: number;
-  private readonly baseH = 0.5;
+  private readonly baseH = 0.64;
   private scaleMul = 1;
 
   constructor() {

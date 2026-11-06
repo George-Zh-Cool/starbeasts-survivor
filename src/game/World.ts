@@ -8,14 +8,18 @@ export class World {
   private readonly ground: THREE.Mesh;
   private readonly sky: THREE.Mesh;
   private readonly marks: THREE.Mesh;
+  private shakeMag = 0;
+  private shakeT = 0;
+  private shakeX = 0;
+  private shakeY = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0x070814);
-    this.scene.fog = new THREE.FogExp2(0x14182e, 0.013);
+    this.scene.fog = new THREE.FogExp2(0x12162c, 0.009);
 
-    this.camera = new THREE.PerspectiveCamera(55, 1, 0.1, 140);
-    this.camera.position.set(0, 18, 14);
+    this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 140);
+    this.camera.position.set(0, 14.6, 11.4);
     this.camera.lookAt(0, 0, 0);
 
     this.renderer = new THREE.WebGLRenderer({
@@ -54,10 +58,28 @@ export class World {
     this.renderer.setSize(w, h, false);
   };
 
-  follow(target: THREE.Vector3, dt: number): void {
-    const desired = new THREE.Vector3(target.x, 18, target.z + 14);
-    this.camera.position.lerp(desired, 1 - Math.pow(0.001, dt));
-    const look = new THREE.Vector3(target.x, 0.5, target.z);
+  /** 短促位移，上限压低，避免连续命中把镜头甩晕。 */
+  impulse(amount: number): void {
+    this.shakeMag = Math.min(0.16, Math.max(this.shakeMag, amount));
+  }
+
+  follow(target: THREE.Vector3, dt: number, shakeDt = dt): void {
+    this.camera.position.x -= this.shakeX;
+    this.camera.position.y -= this.shakeY;
+    const desired = new THREE.Vector3(target.x, 14.6, target.z + 11.4);
+    this.camera.position.lerp(desired, 1 - Math.exp(-dt * 16));
+    this.shakeT += shakeDt;
+    this.shakeX = 0;
+    this.shakeY = 0;
+    if (this.shakeMag > 0.002) {
+      const s = this.shakeMag;
+      this.shakeX = Math.sin(this.shakeT * 16.5) * s;
+      this.shakeY = Math.cos(this.shakeT * 13.2) * s * 0.4;
+      this.shakeMag *= Math.exp(-shakeDt * 11);
+    }
+    this.camera.position.x += this.shakeX;
+    this.camera.position.y += this.shakeY;
+    const look = new THREE.Vector3(target.x + this.shakeX, 0.6, target.z);
     this.camera.lookAt(look);
   }
 

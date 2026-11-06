@@ -53,16 +53,17 @@ export function outline(rows: string[], key = 'k'): string[] {
   return out.map((row) => row.join(''));
 }
 
-export function paint(rows: string[], palette: Record<string, string>): HTMLCanvasElement {
+/** 每格画成 scale×scale，最近邻采样时轮廓更稳。 */
+export function paint(rows: string[], palette: Record<string, string>, scale = 2): HTMLCanvasElement {
   const height = rows.length;
   const width = rows[0].length;
   const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = width * scale;
+  canvas.height = height * scale;
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('无法创建画布');
   ctx.imageSmoothingEnabled = false;
-  ctx.clearRect(0, 0, width, height);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
   for (let y = 0; y < height; y++) {
     const row = rows[y];
     if (row.length !== width) throw new Error('像素行宽度不一致');
@@ -72,7 +73,7 @@ export function paint(rows: string[], palette: Record<string, string>): HTMLCanv
       const color = palette[ch];
       if (!color) throw new Error(`像素调色板缺少 "${ch}"`);
       ctx.fillStyle = color;
-      ctx.fillRect(x, y, 1, 1);
+      ctx.fillRect(x * scale, y * scale, scale, scale);
     }
   }
   return canvas;
@@ -250,7 +251,10 @@ function mulberry32(seed: number): () => number {
   };
 }
 
-/** 夜色石砖：每格纯色，最近邻放大后是清晰的地砖。 */
+/**
+ * 夜色石砖。两档冷色区分砖面，砖缝压暗。
+ * 杂点很少，避免远看糊成噪声。
+ */
 export function paintGround(size = 256): HTMLCanvasElement {
   const canvas = document.createElement('canvas');
   canvas.width = size;
@@ -264,30 +268,24 @@ export function paintGround(size = 256): HTMLCanvasElement {
     for (let tx = 0; tx < tiles; tx++) {
       const roll = rand();
       const checker = ((tx + ty) & 1) === 0;
-      let rgb: [number, number, number] = checker ? [22, 30, 54] : [30, 40, 68];
-      if (roll < 0.07) rgb = [18, 48, 46];
-      else if (roll < 0.12) rgb = [48, 36, 32];
+      let rgb: [number, number, number] = checker ? [16, 24, 46] : [34, 48, 82];
+      if (roll < 0.04) rgb = checker ? [20, 36, 58] : [28, 52, 78];
       ctx.fillStyle = `rgb(${rgb[0]},${rgb[1]},${rgb[2]})`;
       ctx.fillRect(tx * tile, ty * tile, tile, tile);
-      ctx.fillStyle = '#070910';
+      ctx.fillStyle = '#060814';
       ctx.fillRect(tx * tile, ty * tile, tile, 1);
       ctx.fillRect(tx * tile, ty * tile, 1, tile);
-      const specks = 1 + Math.floor(rand() * 3);
-      for (let i = 0; i < specks; i++) {
-        const sx = tx * tile + 2 + Math.floor(rand() * (tile - 3));
-        const sy = ty * tile + 2 + Math.floor(rand() * (tile - 3));
-        const light = rand() > 0.5;
-        ctx.fillStyle = light ? 'rgba(186,206,255,0.35)' : 'rgba(0,0,0,0.35)';
+      if (roll < 0.18) {
+        const sx = tx * tile + 3 + Math.floor(rand() * (tile - 6));
+        const sy = ty * tile + 3 + Math.floor(rand() * (tile - 6));
+        ctx.fillStyle = rand() > 0.45 ? 'rgba(186,206,255,0.22)' : 'rgba(0,0,0,0.28)';
         ctx.fillRect(sx, sy, 1, 1);
       }
-      if (roll > 0.97) {
-        ctx.fillStyle = '#7ee7f2';
-        ctx.fillRect(tx * tile + 6, ty * tile + 6, 2, 2);
+      if (roll > 0.992) {
+        ctx.fillStyle = '#9aeff8';
+        ctx.fillRect(tx * tile + 7, ty * tile + 7, 2, 2);
         ctx.fillStyle = '#f4fdff';
-        ctx.fillRect(tx * tile + 6, ty * tile + 6, 1, 1);
-      } else if (roll > 0.94) {
-        ctx.fillStyle = '#e2b15a';
-        ctx.fillRect(tx * tile + 8, ty * tile + 5, 2, 1);
+        ctx.fillRect(tx * tile + 7, ty * tile + 7, 1, 1);
       }
     }
   }

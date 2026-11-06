@@ -38,6 +38,9 @@ export class Player {
   lastDamageTaken = 0;
   private hurtFlash = 0;
   private pulseTimer = 0;
+  private velX = 0;
+  private velZ = 0;
+  private recoil = 0;
   private readonly modelRoot: THREE.Group;
   private animTime = 0;
   private readonly actor: PixelActor;
@@ -138,14 +141,21 @@ export class Player {
     }
     const spd = this.stats.moveSpeed * (this.slowTimer > 0 ? this.slowFactor : 1);
     const len = Math.hypot(mx, mz);
-    const moving = len > 0.05;
-    if (moving) {
-      const nx = mx / len;
-      const nz = mz / len;
-      this.group.position.x += nx * spd * dt;
-      this.group.position.z += nz * spd * dt;
-      this.facing.set(nx, 0, nz);
+    const hasInput = len > 0.08;
+    let tx = 0;
+    let tz = 0;
+    if (hasInput) {
+      tx = (mx / len) * spd;
+      tz = (mz / len) * spd;
+      this.facing.set(tx, 0, tz).normalize();
     }
+    const rate = hasInput ? 28 : 36;
+    const blend = 1 - Math.exp(-rate * dt);
+    this.velX += (tx - this.velX) * blend;
+    this.velZ += (tz - this.velZ) * blend;
+    this.group.position.x += this.velX * dt;
+    this.group.position.z += this.velZ * dt;
+    const moving = this.velX * this.velX + this.velZ * this.velZ > 0.45;
     if (lookX !== undefined && lookZ !== undefined) {
       const dx = lookX - this.group.position.x;
       const dz = lookZ - this.group.position.z;
@@ -157,7 +167,10 @@ export class Player {
 
     const tier = 1 + this.weaponTier * 0.05;
     const breath = 1 + Math.sin(this.animTime * 3.2) * 0.028;
-    this.modelRoot.scale.set(tier * breath, tier * breath, 1);
+    if (this.recoil > 0) this.recoil = Math.max(0, this.recoil - dt);
+    const squash = 1 - Math.min(0.07, this.recoil * 1.1);
+    const stretch = 1 + (1 - squash) * 0.65;
+    this.modelRoot.scale.set(tier * breath * stretch, tier * breath * squash, 1);
     this.actor.place(this.animTime, moving);
     const blink = this.invuln > 0 && Math.sin(this.invuln * 26) > 0.15;
     this.actor.flash(this.hurtFlash > 0 ? 1 : 0);
@@ -167,6 +180,10 @@ export class Player {
 
     if (this.invuln > 0) this.invuln -= dt;
     this.attackCooldown = Math.max(0, this.attackCooldown - dt);
+  }
+
+  nudgeRecoil(): void {
+    this.recoil = 0.05;
   }
 
   tickPulse(dt: number): boolean {
@@ -196,7 +213,7 @@ export class Player {
     }
     this.lastDamageTaken = applied;
     this.invuln = BALANCE.invulnOnHit;
-    this.hurtFlash = 0.12;
+    this.hurtFlash = 0.16;
     if (this.stats.hp <= 0) this.stats.hp = 0;
     return true;
   }

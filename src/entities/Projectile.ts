@@ -21,7 +21,7 @@ export class Projectile {
   private baseScale = 1;
   private frameT = 0;
   private readonly aspect: number;
-  private readonly baseH = 0.72;
+  private readonly baseH = 1.12;
 
   constructor() {
     this.mesh = new THREE.Group();

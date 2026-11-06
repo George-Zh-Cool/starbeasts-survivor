@@ -13,7 +13,7 @@ export class HostileProjectile {
   readonly velocity = new THREE.Vector3();
   private frameT = 0;
   private readonly aspect: number;
-  private readonly baseH = 0.62;
+  private readonly baseH = 0.96;
 
   constructor() {
     this.frames = projectileFrames('thorn');

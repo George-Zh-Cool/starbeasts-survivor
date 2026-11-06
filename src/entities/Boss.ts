@@ -15,6 +15,7 @@ type Ghost = {
 };
 
 const MAX_GHOSTS = 10;
+const CHARGE_PIPS = 6;
 
 export class Boss {
   readonly group: THREE.Group;
@@ -45,9 +46,21 @@ export class Boss {
   private patternTimer = 0;
   private chargeTimer = 0;
   private charging = false;
+  private windupLeft = 0;
+  private windupDur = 0;
+  private windupKind: BossPattern | null = null;
+  private windupNx = 0;
+  private windupNz = 0;
+  private chargePips: THREE.Mesh[] = [];
+  private punch = 1;
+  private ringColor = 0xff4d6d;
 
   get isCharging(): boolean {
     return this.charging;
+  }
+
+  get isWinding(): boolean {
+    return this.windupLeft > 0;
   }
   private chargeDir = new THREE.Vector3();
   private restTimer = 1.2;
@@ -75,6 +88,11 @@ export class Boss {
     this.patternTimer = 1.5;
     this.chargeTimer = 0;
     this.charging = false;
+    this.windupLeft = 0;
+    this.windupDur = 0;
+    this.windupKind = null;
+    this.punch = 1;
+    this.group.scale.setScalar(1);
     this.restTimer = 0.8;
     this.phase = 0;
     this.animTime = 0;
@@ -103,6 +121,7 @@ export class Boss {
     this.shadow.scale.set(fw, fw * 0.5, 1);
 
     const color = def.shape === 'horn' ? 0xff4d6d : 0x7b2cbf;
+    this.ringColor = color;
     if (!this.warnRing) {
       this.warnRing = makeGroundRing(def.radius * 1.28, color, 0.5);
       this.group.add(this.warnRing);
@@ -110,6 +129,21 @@ export class Boss {
       this.warnRing.scale.setScalar(def.radius * 1.28);
       (this.warnRing.material as THREE.MeshBasicMaterial).color.setHex(color);
     }
+    this.ensureChargePips();
+    this.hideChargePips();
+  }
+
+  private ensureChargePips(): void {
+    while (this.chargePips.length < CHARGE_PIPS) {
+      const pip = makeGroundRing(0.7, 0xffd166, 0.9);
+      pip.visible = false;
+      this.fxRoot.add(pip);
+      this.chargePips.push(pip);
+    }
+  }
+
+  private hideChargePips(): void {
+    for (const pip of this.chargePips) pip.visible = false;
   }
 
   private clearGhosts(): void {
@@ -218,12 +252,17 @@ export class Boss {
     const nx = dx / dist;
     const nz = dz / dist;
 
-    if (Math.abs(nx) > 0.05) this.actor.setFacing(nx > 0);
-    this.actor.place(this.animTime, this.charging || this.restTimer <= 0);
-    if (this.warnRing) {
+    const faceX = this.windupLeft > 0 ? this.windupNx : this.charging ? this.chargeDir.x : nx;
+    if (Math.abs(faceX) > 0.05) this.actor.setFacing(faceX > 0);
+    this.actor.place(this.animTime, this.charging || this.windupLeft > 0 || this.restTimer <= 0);
+    if (this.warnRing && this.windupLeft <= 0) {
       const m = this.warnRing.material as THREE.MeshBasicMaterial;
-      m.opacity = 0.32 + Math.sin(this.animTime * 5) * 0.12 + (this.charging ? 0.28 : 0);
+      m.color.setHex(this.charging ? 0xfff1a8 : this.ringColor);
+      m.opacity = 0.32 + Math.sin(this.animTime * 5) * 0.12 + (this.charging ? 0.35 : 0);
+      this.warnRing.scale.setScalar(this.radius * (this.charging ? 1.45 : 1.28));
     }
+    this.punch += (1 - this.punch) * (1 - Math.exp(-16 * dt));
+    this.group.scale.setScalar(this.punch);
 
     let action: BossAction = null;
     this.patternTimer -= dt;
@@ -231,14 +270,28 @@ export class Boss {
     const patterns = this.def.patterns;
     const current = patterns[this.patternIdx % patterns.length];
 
-    if (this.charging) {
+    if (this.windupLeft > 0) {
+      this.windupLeft -= dt;
+      const creep = this.windupKind === 'charge' ? 0.1 : 0.28;
+      this.group.position.x += this.windupNx * this.speed * creep * dt;
+      this.group.position.z += this.windupNz * this.speed * creep * dt;
+      this.syncTelegraph();
+      if (this.windupLeft <= 0) {
+        const kind = this.windupKind;
+        action = this.releaseWindup();
+        if (kind !== 'charge') {
+          this.restTimer = 0.7;
+          this.nextPattern();
+        }
+      }
+    } else if (this.charging) {
       this.chargeTimer -= dt;
-      const chargeSpeed = this.speed * 4.2;
+      const chargeSpeed = this.speed * 3.85;
       this.group.position.x += this.chargeDir.x * chargeSpeed * dt;
       this.group.position.z += this.chargeDir.z * chargeSpeed * dt;
       if (this.chargeTimer <= 0) {
         this.charging = false;
-        this.restTimer = 1.0;
+        this.restTimer = 1.05;
         this.nextPattern();
       }
     } else if (this.restTimer > 0) {
@@ -246,11 +299,7 @@ export class Boss {
       this.group.position.x += nx * this.speed * 0.35 * dt;
       this.group.position.z += nz * this.speed * 0.35 * dt;
     } else if (this.patternTimer <= 0) {
-      action = this.triggerPattern(current, nx, nz);
-      if (current !== 'charge') {
-        this.restTimer = 0.7;
-        this.nextPattern();
-      }
+      this.beginWindup(current, nx, nz);
     } else {
       this.group.position.x += nx * this.speed * dt;
       this.group.position.z += nz * this.speed * dt;
@@ -290,35 +339,93 @@ export class Boss {
     this.patternTimer = interval;
   }
 
-  private triggerPattern(pattern: BossPattern, nx: number, nz: number): BossAction {
-    this.attackFlash = 0.55;
+  private chargeDuration(): number {
+    return 0.85 + (this.phase > 0 ? 0.25 : 0);
+  }
+
+  private beginWindup(pattern: BossPattern, nx: number, nz: number): void {
+    this.windupKind = pattern;
+    this.windupNx = nx;
+    this.windupNz = nz;
+    this.windupDur = pattern === 'charge' ? (this.phase > 0 ? 0.5 : 0.64) : pattern === 'ring' ? 0.52 : 0.36;
+    this.windupLeft = this.windupDur;
+    this.attackFlash = this.windupDur + 0.15;
     this.phaseGhostArmed = false;
+    this.patternTimer = 99;
+    this.syncTelegraph();
+  }
+
+  private releaseWindup(): BossAction {
+    const pattern = this.windupKind;
+    this.windupKind = null;
+    this.windupLeft = 0;
+    this.hideChargePips();
+    if (!pattern || !this.def) return null;
     if (pattern === 'charge') {
       this.charging = true;
-      this.chargeTimer = 0.85 + (this.phase > 0 ? 0.25 : 0);
-      this.chargeDir.set(nx, 0, nz);
-      this.patternTimer = 99;
+      this.chargeTimer = this.chargeDuration();
+      this.chargeDir.set(this.windupNx, 0, this.windupNz);
       this.ghostCooldown = 0;
       return null;
     }
     if (pattern === 'ring') {
-      this.patternTimer = 99;
       return {
         type: 'ring',
         count: this.phase > 0 ? 16 : 12,
-        speed: 7.5 + this.phase * 1.5,
+        speed: 7.2 + this.phase * 1.2,
         damage: this.contactDamage * 0.55,
-        color: this.def!.accent,
+        color: this.def.accent,
       };
     }
-    this.patternTimer = 99;
     return { type: 'summon', count: this.phase > 0 ? 6 : 4 };
+  }
+
+  /** 冲撞：一串金环标出锁定方向。环攻：警示圈由小变大。 */
+  private syncTelegraph(): void {
+    if (!this.warnRing || !this.def) return;
+    const mat = this.warnRing.material as THREE.MeshBasicMaterial;
+    const left = Math.max(0, this.windupLeft);
+    const dur = Math.max(0.05, this.windupDur);
+    const progress = 1 - left / dur;
+    const blink = 0.35 + 0.65 * Math.abs(Math.sin(this.animTime * 24));
+    if (this.windupKind === 'charge') {
+      mat.color.setHex(0xffe08a);
+      mat.opacity = blink;
+      this.warnRing.scale.setScalar(this.radius * (1.15 + 0.2 * Math.sin(this.animTime * 22)));
+      const dist = this.speed * 3.85 * this.chargeDuration();
+      for (let i = 0; i < this.chargePips.length; i++) {
+        const pip = this.chargePips[i];
+        const t = (i + 1) / (this.chargePips.length + 0.35);
+        pip.visible = true;
+        pip.position.set(
+          this.group.position.x + this.windupNx * dist * t,
+          0.07,
+          this.group.position.z + this.windupNz * dist * t,
+        );
+        pip.scale.setScalar(this.radius * (0.72 + 0.1 * Math.sin(this.animTime * 18 - i)));
+        const pm = pip.material as THREE.MeshBasicMaterial;
+        pm.color.setHex(i === this.chargePips.length - 1 ? 0xfff6c8 : 0xffd166);
+        pm.opacity = 0.72 + 0.28 * Math.abs(Math.sin(this.animTime * 16 - i * 0.55));
+      }
+      return;
+    }
+    this.hideChargePips();
+    if (this.windupKind === 'ring') {
+      mat.color.setHex(0xd8fbff);
+      mat.opacity = 0.4 + 0.5 * blink;
+      this.warnRing.scale.setScalar(this.radius * (0.45 + progress * 1.25));
+      return;
+    }
+    mat.color.setHex(0xff7ad9);
+    mat.opacity = blink;
+    this.warnRing.scale.setScalar(this.radius * (1.1 + progress * 0.35));
   }
 
   takeDamage(amount: number): boolean {
     if (!this.active) return false;
     this.hp -= amount;
-    this.hitFlash = 0.1;
+    this.hitFlash = 0.14;
+    this.punch = 1.16;
     this.updateHpBar();
     if (this.hp <= 0) {
       this.despawn();
@@ -332,11 +439,22 @@ export class Boss {
     this.group.visible = false;
     this.def = null;
     this.charging = false;
+    this.windupLeft = 0;
+    this.windupKind = null;
+    this.punch = 1;
+    this.group.scale.setScalar(1);
+    this.hideChargePips();
     this.clearGhosts();
   }
 
   dispose(): void {
     this.clearGhosts();
+    for (const pip of this.chargePips) {
+      this.fxRoot.remove(pip);
+      pip.geometry.dispose();
+      (pip.material as THREE.Material).dispose();
+    }
+    this.chargePips = [];
     this.actor?.dispose();
     this.group.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {

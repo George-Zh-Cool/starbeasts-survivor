@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { makeGroundRing } from '../visual/pixelScene';
+import { makeGroundRing, makeShadow } from '../visual/pixelScene';
+import { propVisual } from '../visual/sprites';
 
 export type ObstacleKind = 'rock' | 'crystal';
 
@@ -89,45 +90,35 @@ export class ObstacleField {
     return o;
   }
 
-  private buildRock(group: THREE.Group, radius: number): void {
-    const seed = Math.floor(radius * 1000 + group.position.x * 13 + group.position.z * 17);
-    const rnd = (i: number) => {
-      const x = Math.sin(seed * 12.9898 + i * 78.233) * 43758.5453;
-      return x - Math.floor(x);
-    };
-    const colors = [0x3e465c, 0x626c86, 0x2c3348, 0x8b93a8, 0x6e6758];
-    const cell = radius * 0.42;
-    for (let i = 0; i < 7; i++) {
-      const sx = cell * (0.85 + rnd(i) * 0.65);
-      const sy = cell * (0.75 + rnd(i + 20) * 0.85);
-      const sz = cell * (0.85 + rnd(i + 40) * 0.55);
-      const mesh = new THREE.Mesh(
-        new THREE.BoxGeometry(sx, sy, sz),
-        new THREE.MeshLambertMaterial({ color: colors[i % colors.length] }),
-      );
-      mesh.position.set((rnd(i + 3) - 0.5) * radius * 0.8, sy * 0.5 + i * cell * 0.36, (rnd(i + 8) - 0.5) * radius * 0.7);
-      mesh.rotation.y = (Math.floor(rnd(i + 11) * 4) * Math.PI) / 2;
-      group.add(mesh);
+  private buildBillboard(group: THREE.Group, kind: 'rock' | 'crystal', radius: number): THREE.SpriteMaterial {
+    const vis = propVisual(kind);
+    const mat = new THREE.SpriteMaterial({
+      map: vis.texture,
+      transparent: true,
+      alphaTest: 0.2,
+      depthWrite: true,
+      toneMapped: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.center.set(0.5, 0);
+    sprite.renderOrder = 2;
+    const h = radius * (kind === 'rock' ? 2.05 : 2.45);
+    sprite.scale.set(h * vis.aspect, h, 1);
+    group.add(makeShadow(Math.max(0.7, h * vis.aspect * 0.72)));
+    group.add(sprite);
+    if (kind === 'crystal') {
+      group.add(makeGroundRing(radius * 1.05, 0x7ee7f5, 0.28));
     }
+    return mat;
+  }
+
+  private buildRock(group: THREE.Group, radius: number): void {
+    this.buildBillboard(group, 'rock', radius);
   }
 
   private buildCrystal(group: THREE.Group, radius: number): void {
-    const specs = [
-      { h: radius * 2.15, w: radius * 0.42, x: 0, z: 0, color: 0xdffbff, em: 0x3ec8e4 },
-      { h: radius * 1.45, w: radius * 0.32, x: radius * 0.4, z: radius * 0.1, color: 0x7ee7f5, em: 0x1a7a90 },
-      { h: radius * 1.15, w: radius * 0.28, x: -radius * 0.38, z: -radius * 0.12, color: 0xb8f6ff, em: 0x145868 },
-      { h: radius * 0.7, w: radius * 0.26, x: radius * 0.08, z: -radius * 0.4, color: 0x49c4d8, em: 0x0e4a58 },
-    ];
-    const mats: THREE.MeshLambertMaterial[] = [];
-    for (const s of specs) {
-      const mat = new THREE.MeshLambertMaterial({ color: s.color, emissive: s.em, emissiveIntensity: 0.55 });
-      mats.push(mat);
-      const mesh = new THREE.Mesh(new THREE.BoxGeometry(s.w, s.h, s.w), mat);
-      mesh.position.set(s.x, s.h * 0.5, s.z);
-      group.add(mesh);
-    }
-    group.add(makeGroundRing(radius * 1.05, 0x7ee7f5, 0.4));
-    group.userData.crystalMats = mats;
+    const mat = this.buildBillboard(group, 'crystal', radius);
+    group.userData.crystalMat = mat;
   }
 
   clear(): void {
@@ -142,6 +133,10 @@ export class ObstacleField {
     o.mesh.traverse((obj) => {
       if (obj instanceof THREE.Mesh) {
         obj.geometry.dispose();
+        const m = obj.material;
+        if (Array.isArray(m)) m.forEach((x) => x.dispose());
+        else m.dispose();
+      } else if (obj instanceof THREE.Sprite) {
         const m = obj.material;
         if (Array.isArray(m)) m.forEach((x) => x.dispose());
         else m.dispose();
@@ -247,10 +242,10 @@ export class ObstacleField {
         const flash = (o.mesh.userData.flash as number) || 0;
         const next = Math.max(0, flash - dt);
         o.mesh.userData.flash = next;
-        const mats = o.mesh.userData.crystalMats as THREE.MeshLambertMaterial[] | undefined;
-        const pulse = next > 0 ? 1.7 : 0.4 + Math.sin(performance.now() * 0.004 + o.id) * 0.18;
-        if (mats) {
-          for (const m of mats) m.emissiveIntensity = pulse;
+        const mat = o.mesh.userData.crystalMat as THREE.SpriteMaterial | undefined;
+        if (mat) {
+          const hot = next > 0 ? 1.8 : 1;
+          mat.color.setRGB(hot, hot, hot);
         }
       }
     }

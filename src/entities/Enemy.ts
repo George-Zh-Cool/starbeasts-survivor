@@ -19,6 +19,8 @@ export class Enemy {
   xp = 1;
   radius = 0.5;
   hitFlash = 0;
+  /** 死亡爆开期间仍占着格子，但不再受伤、不再造成接触伤害。 */
+  dying = false;
   affix: AffixDef | null = null;
   isSplitling = false;
   private knockVx = 0;
@@ -29,6 +31,9 @@ export class Enemy {
   private readonly shadow: THREE.Mesh;
   private readonly eliteRing: THREE.Mesh;
   private animTime = 0;
+  private deathLeft = 0;
+  private punch = 1;
+  private punchCd = 0;
 
   constructor() {
     this.id = nextEnemyId++;
@@ -68,6 +73,13 @@ export class Enemy {
     this.contactDamage = def.contactDamage * dmgMul;
     this.xp = Math.max(1, Math.floor(def.xp * (this.affix ? 1.5 : 1) * (this.isSplitling ? 0.5 : 1)));
     this.hitFlash = 0;
+    this.dying = false;
+    this.deathLeft = 0;
+    this.punch = 1;
+    this.punchCd = 0;
+    this.mesh.scale.setScalar(1);
+    this.actor.setOpacity(1);
+    this.actor.flash(0);
     this.knockVx = 0;
     this.knockVz = 0;
     this.animTime = Math.random() * 10;
@@ -129,6 +141,19 @@ export class Enemy {
   update(dt: number, targetX: number, targetZ: number): void {
     if (!this.active) return;
     this.animTime += dt;
+    if (this.dying) {
+      this.deathLeft -= dt;
+      const t = 1 - Math.max(0, this.deathLeft) / 0.2;
+      this.mesh.scale.setScalar(1 + t * 0.72);
+      this.actor.sprite.position.y = t * 0.42;
+      this.actor.flash(1);
+      this.actor.setOpacity(1 - t * t);
+      if (this.deathLeft <= 0) this.despawn();
+      return;
+    }
+    if (this.punchCd > 0) this.punchCd -= dt;
+    this.punch += (1 - this.punch) * (1 - Math.exp(-18 * dt));
+    this.mesh.scale.setScalar(this.punch);
     this.mesh.position.x += this.knockVx * dt;
     this.mesh.position.z += this.knockVz * dt;
     this.knockVx *= Math.max(0, 1 - dt * 8);
@@ -164,12 +189,19 @@ export class Enemy {
   }
 
   takeDamage(amount: number): boolean {
-    if (!this.active) return false;
+    if (!this.active || this.dying) return false;
     const mul = this.affix?.damageTakenMul ?? 1;
     this.hp -= amount * mul;
-    this.hitFlash = 0.08;
+    this.hitFlash = 0.12;
+    if (this.punchCd <= 0) {
+      this.punch = 1.22;
+      this.punchCd = 0.09;
+    }
     if (this.hp <= 0) {
-      this.despawn();
+      this.dying = true;
+      this.deathLeft = 0.2;
+      this.knockVx = 0;
+      this.knockVz = 0;
       return true;
     }
     return false;
@@ -177,6 +209,12 @@ export class Enemy {
 
   despawn(): void {
     this.active = false;
+    this.dying = false;
+    this.deathLeft = 0;
+    this.punch = 1;
+    this.mesh.scale.setScalar(1);
+    this.actor.setOpacity(1);
+    this.actor.flash(0);
     this.mesh.visible = false;
     this.clearAffixVisuals();
   }
