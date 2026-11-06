@@ -8,6 +8,7 @@ import type { ObjectPool } from './ObjectPool';
 import type { ObstacleField } from './Obstacles';
 import { rollAffixForSpawn } from '../data/affixes';
 import type * as THREE from 'three';
+import type { RunModeId } from '../data/modes';
 
 export type EventKind = 'boss' | 'elite_tide' | 'starfall' | 'pack' | 'swarm';
 
@@ -94,7 +95,7 @@ export class EventDirector {
     return last;
   }
 
-  reset(): void {
+  reset(mode: RunModeId = 'standard'): void {
     this.nextIdx = 0;
     this.eliteTideTimer = 0;
     this.eliteTideActive = false;
@@ -110,10 +111,18 @@ export class EventDirector {
     if (this.boss.fxRoot.parent) {
       this.scene.remove(this.boss.fxRoot);
     }
-    this.schedule = this.buildSchedule();
+    this.schedule = this.buildSchedule(mode);
   }
 
-  private buildSchedule(): ScheduledEvent[] {
+  private buildSchedule(mode: RunModeId): ScheduledEvent[] {
+    if (mode === 'sprint') {
+      return [
+        { atSec: 18, kind: 'swarm', label: '萤潮' },
+        { atSec: 32, kind: 'boss', bossIndex: 0, label: BOSS_HORN.name },
+        { atSec: 50, kind: 'elite_tide', label: '精英潮' },
+        { atSec: 68, kind: 'boss', bossIndex: 1, label: BOSS_CORE.name },
+      ];
+    }
     const list: ScheduledEvent[] = [
       { atSec: 40, kind: 'starfall', label: '星屑雨' },
       { atSec: 55, kind: 'swarm', label: '萤潮' },

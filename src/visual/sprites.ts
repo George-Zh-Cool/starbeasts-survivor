@@ -17,6 +17,8 @@ export type CreatureId =
   | 'fox'
   | 'turtle'
   | 'falcon'
+  | 'marten'
+  | 'lizard'
   | 'crystal'
   | 'wolf'
   | 'beetle'
@@ -26,7 +28,7 @@ export type CreatureId =
   | 'moth'
   | 'crab';
 
-export type ShotStyle = 'flame' | 'shard' | 'thorn';
+export type ShotStyle = 'flame' | 'shard' | 'thorn' | 'arc';
 
 type Align = 'left' | 'center';
 type Bob = 'step' | 'hover';
@@ -174,6 +176,87 @@ const DEFS: Record<CreatureId, CreatureDef> = {
       '......dd..dd',
       '......LL..LL',
       '..............',
+    ],
+  },
+  marten: {
+    align: 'left',
+    bob: 'step',
+    motion: { step: true },
+    palette: {
+      k: '#071824',
+      i: '#e7f8ff',
+      o: '#8fd4ff',
+      d: '#2f6cb5',
+      e: '#061018',
+      w: '#ffffff',
+      m: '#c5eeff',
+      B: '#ffe08a',
+      b: '#e0a84a',
+      L: '#1a4d86',
+      t: '#d7f4ff',
+    },
+    fill: [
+      '.............ii',
+      '............iooi',
+      '.......ooooooddo',
+      '.....ooooowweemm',
+      '....Booooooooooo',
+      '...bBoooooooooo',
+      'tttt.ooooddoooo',
+      'tttt..oooooooo',
+      'ttt....oo..oo',
+      '........LL..LL',
+      '........LL..LL',
+    ],
+    walk: [
+      '.............ii',
+      '............iooi',
+      '.......ooooooddo',
+      '.....ooooowweemm',
+      '....Booooooooooo',
+      '...bBoooooooooo',
+      'tttt.ooooddoooo',
+      'ttt...oooooooo',
+      '........oo....oo',
+      '.......LL......LL',
+      '................',
+    ],
+  },
+  lizard: {
+    align: 'left',
+    bob: 'step',
+    motion: { step: true },
+    palette: {
+      k: '#241808',
+      y: '#ffe56a',
+      d: '#e09a12',
+      p: '#7b3fe4',
+      e: '#1a1008',
+      w: '#fff6d8',
+      L: '#a56a10',
+      t: '#c9a441',
+    },
+    fill: [
+      '......p..p..p',
+      '.....ypypypypyyy',
+      '....yyyyyyyyyyyytt',
+      '..yyyyyweeyyyyyytt',
+      '.yyyyyyyyyyyyyyttt',
+      '..yyyyddddyyyyytt',
+      '....yyyyyyyyyy',
+      '.....LL....LL',
+      '.....LL....LL',
+    ],
+    walk: [
+      '......p..p..p',
+      '.....ypypypypyyy',
+      '....yyyyyyyyyyyytt',
+      '..yyyyyweeyyyyyytt',
+      '.yyyyyyyyyyyyyyttt',
+      '..yyyyddddyyyyytt',
+      '.....yyyyyyyyy',
+      '....LL......LL',
+      '................',
     ],
   },
   wolf: {
@@ -516,6 +599,10 @@ function targetHeight(id: CreatureId, radius?: number): number {
       return 2.2;
     case 'falcon':
       return 2.38;
+    case 'marten':
+      return 2.15;
+    case 'lizard':
+      return 1.9;
     case 'crystal':
       return (radius ?? 0.55) * 3.55;
     case 'wolf':
@@ -662,6 +749,15 @@ export function projectileFrames(style: ShotStyle): [THREE.Texture, THREE.Textur
       'G',
     );
   }
+  if (style === 'arc') {
+    return flickerPair(
+      'arc',
+      ['..W.', '.W.W', 'W.W.', '.W.W', 'W.W.', '.W.W', '..W.'],
+      GRAY,
+      'W',
+      'G',
+    );
+  }
   if (style === 'thorn') {
     return flickerPair(
       'thorn',
@@ -745,6 +841,7 @@ export function warmupSprites(): void {
   projectileFrames('flame');
   projectileFrames('shard');
   projectileFrames('thorn');
+  projectileFrames('arc');
   gemFrames();
   sparkTexture(0);
   sparkTexture(1);

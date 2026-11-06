@@ -1,6 +1,7 @@
 /** 各角色武器进化形态（原创设定，无第三方 IP） */
 
 export type WeaponTier = 0 | 1 | 2;
+export type ShotStyle = 'flame' | 'shard' | 'thorn' | 'arc';
 
 export interface WeaponForm {
   tier: WeaponTier;
@@ -35,6 +36,12 @@ export interface WeaponForm {
   branch: 'a' | 'b';
   /** 环内敌人移速系数，1 表示不减速 */
   auraSlow: number;
+  /** 命中减速秒数，0 表示不减速 */
+  slowDuration: number;
+  /** 减速后的移速系数 */
+  slowFactor: number;
+  /** 弹体像素。未设时按角色默认 */
+  shot?: ShotStyle;
 }
 
 const BASIC: Omit<WeaponForm, 'tier' | 'id' | 'name' | 'description'> = {
@@ -51,6 +58,8 @@ const BASIC: Omit<WeaponForm, 'tier' | 'id' | 'name' | 'description'> = {
   lifeBonus: 0,
   branch: 'a',
   auraSlow: 1,
+  slowDuration: 0,
+  slowFactor: 1,
 };
 
 /** 焰心狐：火弹 → 爆裂弹 → 连锁火球 */
@@ -200,16 +209,144 @@ const WIND_BRANCH_B: WeaponForm = {
   damageMul: 1.08,
 };
 
+/** 霜铃貂：霜铃刺 → 双铃霜刺 → 冻潮连珠 / 霜域爆铃 */
+const FROST_FORMS: WeaponForm[] = [
+  {
+    ...BASIC,
+    tier: 0,
+    id: 'frost_basic',
+    name: '霜铃刺',
+    description: '命中短暂减速，方便拉开距离',
+    projScale: 0.95,
+    projColor: 0xb8f3ff,
+    shot: 'thorn',
+    slowDuration: 0.65,
+    slowFactor: 0.62,
+  },
+  {
+    ...BASIC,
+    tier: 1,
+    id: 'frost_twin',
+    name: '双铃霜刺',
+    description: '双发霜刺，减速更久',
+    projScale: 1.05,
+    projColor: 0xd7f7ff,
+    shot: 'thorn',
+    extraProjectiles: 1,
+    damageMul: 1.08,
+    slowDuration: 0.8,
+    slowFactor: 0.55,
+  },
+  {
+    ...BASIC,
+    tier: 2,
+    id: 'frost_chain',
+    name: '冻潮连珠',
+    description: '穿透并弹向旁边的敌人，一路留着减速',
+    projScale: 1.15,
+    projColor: 0xf2fcff,
+    shot: 'thorn',
+    pierceBonus: 2,
+    chainBounces: 2,
+    damageMul: 1.18,
+    lifeBonus: 0.35,
+    slowDuration: 0.9,
+    slowFactor: 0.5,
+  },
+];
+
+/** 雷脊蜥：脊电束 → 分叉电弧 → 雷脊连弧 / 爆核雷击 */
+const STORM_FORMS: WeaponForm[] = [
+  {
+    ...BASIC,
+    tier: 0,
+    id: 'storm_basic',
+    name: '脊电束',
+    description: '短程电弧，命中后跳向近处另一只',
+    projScale: 1.15,
+    projColor: 0xfff3a0,
+    shot: 'arc',
+    chainBounces: 1,
+    lifeBonus: -0.85,
+    damageMul: 1.05,
+  },
+  {
+    ...BASIC,
+    tier: 1,
+    id: 'storm_fork',
+    name: '分叉电弧',
+    description: '双发电弧，弹跳更多',
+    projScale: 1.2,
+    projColor: 0xffe56a,
+    shot: 'arc',
+    extraProjectiles: 1,
+    chainBounces: 2,
+    lifeBonus: -0.55,
+    damageMul: 1.12,
+  },
+  {
+    ...BASIC,
+    tier: 2,
+    id: 'storm_chain',
+    name: '雷脊连弧',
+    description: '电弧连跳整片，并多穿透一发',
+    projScale: 1.28,
+    projColor: 0xfff6c2,
+    shot: 'arc',
+    chainBounces: 4,
+    pierceBonus: 1,
+    lifeBonus: -0.15,
+    damageMul: 1.22,
+  },
+];
+
+const FROST_BRANCH_B: WeaponForm = {
+  ...BASIC,
+  tier: 2,
+  branch: 'b',
+  id: 'frost_burst',
+  name: '霜域爆铃',
+  description: '不穿透。命中炸开霜圈，圈里的敌人都被钉慢。',
+  projScale: 1.55,
+  projColor: 0xe8fbff,
+  shot: 'thorn',
+  splashRadius: 2.8,
+  splashRatio: 0.55,
+  damageMul: 1.3,
+  slowDuration: 1.05,
+  slowFactor: 0.46,
+};
+
+const STORM_BRANCH_B: WeaponForm = {
+  ...BASIC,
+  tier: 2,
+  branch: 'b',
+  id: 'storm_core',
+  name: '爆核雷击',
+  description: '不弹跳。短程电团命中后炸开，适合贴脸清一团。',
+  projScale: 1.75,
+  projColor: 0xffd23a,
+  shot: 'arc',
+  splashRadius: 3.15,
+  splashRatio: 0.65,
+  damageMul: 1.4,
+  lifeBonus: -0.35,
+};
+
 const BY_CHAR: Record<string, WeaponForm[]> = {
   flamefox: FLAME_FORMS,
   tideturtle: TIDE_FORMS,
   windfalcon: WIND_FORMS,
+  frostmarten: FROST_FORMS,
+  stormlizard: STORM_FORMS,
 };
 
 const BRANCH_B: Record<string, WeaponForm> = {
   flamefox: FLAME_BRANCH_B,
   tideturtle: TIDE_BRANCH_B,
   windfalcon: WIND_BRANCH_B,
+  frostmarten: FROST_BRANCH_B,
+  stormlizard: STORM_BRANCH_B,
 };
 
 export type WeaponBranch = 'a' | 'b';

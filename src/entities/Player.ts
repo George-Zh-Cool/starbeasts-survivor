@@ -13,6 +13,7 @@ import {
   type WeaponTier,
 } from '../data/weapons';
 import { BALANCE, xpToNextForLevel } from '../data/balance';
+import { applyStarter, overlayTier0 } from '../data/starters';
 import { PixelActor } from '../visual/sprites';
 import { makeGroundRing, makeShadow } from '../visual/pixelScene';
 
@@ -47,8 +48,9 @@ export class Player {
   private animTime = 0;
   private readonly actor: PixelActor;
   private readonly footRing: THREE.Mesh;
+  private readonly starterId: string;
 
-  constructor(def: CharacterDef) {
+  constructor(def: CharacterDef, starterId = 'plain') {
     this.characterId = def.id;
     this.weaponKind = def.weaponKind;
     this.color = def.color;
@@ -67,6 +69,8 @@ export class Player {
       auraRadius: def.base.auraRadius ?? 0,
       ...createBaseTraitStats(),
     };
+    this.starterId = starterId;
+    applyStarter(this.stats, def.weaponKind, starterId);
 
     this.group = new THREE.Group();
     this.group.position.set(0, 0, 0);
@@ -82,7 +86,8 @@ export class Player {
   }
 
   get weaponForm(): WeaponForm {
-    return getWeaponForm(this.characterId, this.weaponTier, this.weaponBranch);
+    const form = getWeaponForm(this.characterId, this.weaponTier, this.weaponBranch);
+    return overlayTier0(form, this.weaponKind, this.starterId);
   }
 
   get position(): THREE.Vector3 {

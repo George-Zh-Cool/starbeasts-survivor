@@ -35,7 +35,7 @@ export class HUD {
         <div class="boss-bar-hp" data-boss-hp></div>
       </div>
       <div class="hud-top">
-        <div class="hud-brand"><b>星兽突围</b><span>突围中</span></div>
+        <div class="hud-brand"><b>星兽突围</b><span data-brand>突围中</span></div>
         <div class="hud-stat"><div class="label">时间</div><div class="value" data-time>0:00</div></div>
         <div class="hud-stat"><div class="label">等级</div><div class="value" data-level>1</div></div>
         <div class="hud-stat"><div class="label">击杀</div><div class="value" data-kills>0</div></div>
@@ -113,6 +113,11 @@ export class HUD {
     this.root.style.display = v ? 'block' : 'none';
   }
 
+  setBrand(text: string): void {
+    const el = this.root.querySelector('[data-brand]');
+    if (el) el.textContent = text;
+  }
+
   /** 很短的暖色闪，用来托住重击，不遮画面。 */
   flash(strength = 0.18): void {
     this.flashEl.style.opacity = String(Math.max(0, Math.min(0.4, strength)));
@@ -170,10 +175,18 @@ export class HUD {
     this.root.classList.remove('has-boss');
   }
 
-  update(timeSec: number, level: number, kills: number, hp: number, maxHp: number, xp: number, xpToNext: number, weaponName?: string, shield?: number, shieldMax?: number): void {
+  update(timeSec: number, level: number, kills: number, hp: number, maxHp: number, xp: number, xpToNext: number, weaponName?: string, shield?: number, shieldMax?: number, goalSec = 0): void {
     const m = Math.floor(timeSec / 60);
     const s = Math.floor(timeSec % 60);
-    this.timeEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+    const clock = `${m}:${s.toString().padStart(2, '0')}`;
+    if (goalSec > 0) {
+      const left = Math.max(0, goalSec - timeSec);
+      const lm = Math.floor(left / 60);
+      const ls = Math.floor(left % 60);
+      this.timeEl.textContent = `${clock} · 剩${lm}:${ls.toString().padStart(2, '0')}`;
+    } else {
+      this.timeEl.textContent = clock;
+    }
     this.levelEl.textContent = String(level);
     this.killsEl.textContent = String(kills);
     const hpRatio = maxHp > 0 ? Math.max(0, Math.min(1, hp / maxHp)) : 0;

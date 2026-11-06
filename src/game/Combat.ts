@@ -220,6 +220,7 @@ export class Combat {
           const died = e.takeDamage(dealt, { flinch: true, heavy: p.crit || elite });
           this.emitNumber(p.crit ? 'crit' : elite ? 'heavy' : 'dmg', dealt, e.mesh.position.x, e.mesh.position.z);
           e.applyKnockback(p.velocity.x, p.velocity.z, p.knockback);
+          if (p.slowDuration > 0) e.applySlow(p.slowDuration, p.slowFactor);
           if (died) this.punchKill(e.mesh.position.x, e.mesh.position.z, player.color, elite ? 'elite' : 'kill');
           else this.punchHit(e.mesh.position.x, e.mesh.position.z, p.crit ? 0xfff1a8 : player.color, p.crit || elite ? 'crit' : 'hit', p.crit ? 1.65 : 1.35);
           this.applySplash(player, enemies, boss, e.mesh.position.x, e.mesh.position.z, p, onKill, onBossKill, e.id);
@@ -404,6 +405,7 @@ export class Combat {
         const dealt = splashDmg * this.toughMul(player, e.kind === 'elite');
         const died = e.takeDamage(dealt, { flinch: true, heavy: e.kind === 'elite' });
         e.applyKnockback(dx, dz, Math.max(2.2, p.knockback * 0.45));
+        if (p.slowDuration > 0) e.applySlow(p.slowDuration * 0.85, p.slowFactor);
         if (died) {
           this.punchKill(e.mesh.position.x, e.mesh.position.z, player.accent, e.kind === 'elite' ? 'elite' : 'kill');
           onKill(e);
@@ -490,7 +492,9 @@ export class Combat {
           chainLeft: form.chainBounces,
           knockback: 6.8 + player.stats.knockback,
           crit,
-          style: player.characterId === 'windfalcon' ? 'shard' : 'flame',
+          style: form.shot ?? (player.characterId === 'windfalcon' ? 'shard' : 'flame'),
+          slowDuration: form.slowDuration,
+          slowFactor: form.slowFactor,
         },
       );
       this.projectiles.push(p);

@@ -22,6 +22,10 @@ function readBossKills(): number {
   }
 }
 
+export function bossKillCount(): number {
+  return readBossKills();
+}
+
 export function recordBossKill(): void {
   try {
     localStorage.setItem(LS_BOSSES, String(readBossKills() + 1));
